@@ -1,8 +1,15 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { auth } from '@/lib/firebase/config';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase/config';
+import { signOut } from '@/lib/firebase/auth';
 
 const navigation = [
   { name: '대시보드', href: '/dashboard', icon: '📊' },
@@ -12,12 +19,64 @@ const navigation = [
   { name: '설정', href: '/settings', icon: '⚙️' },
 ];
 
+interface UserData {
+  name: string;
+  email: string;
+  grade: number;
+  currentLevel: number;
+  totalXp: number;
+  theta: number;
+  streakDays: number;
+}
+
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        setUser(firebaseUser);
+        // Firestore에서 사용자 데이터 가져오기
+        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+        if (userDoc.exists()) {
+          setUserData(userDoc.data() as UserData);
+        }
+      } else {
+        router.push('/login');
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [router]);
+
+  const handleLogout = async () => {
+    await signOut();
+    router.push('/login');
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  const displayName = userData?.name || user.displayName || '사용자';
+  const currentLevel = userData?.currentLevel || 1;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -60,13 +119,19 @@ export default function DashboardLayout({
           <div className="p-4 border-t">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white font-medium">
-                홍
+                {displayName.charAt(0)}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">홍길동</p>
-                <p className="text-xs text-gray-500">Level 5</p>
+                <p className="text-sm font-medium text-gray-900 truncate">{displayName}</p>
+                <p className="text-xs text-gray-500">Level {currentLevel}</p>
               </div>
             </div>
+            <button
+              onClick={handleLogout}
+              className="mt-3 w-full text-sm text-gray-500 hover:text-red-600 transition-colors text-left px-1"
+            >
+              로그아웃
+            </button>
           </div>
         </div>
       </aside>
@@ -80,6 +145,12 @@ export default function DashboardLayout({
             </div>
             <span className="font-bold">MathFlow</span>
           </div>
+          <button
+            onClick={handleLogout}
+            className="text-sm text-gray-500 hover:text-red-600"
+          >
+            로그아웃
+          </button>
         </div>
       </header>
 
