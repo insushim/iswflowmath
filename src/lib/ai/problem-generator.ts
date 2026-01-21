@@ -27,8 +27,8 @@ function getGeminiClient(): GenerativeModel {
       throw new Error('GEMINI_API_KEY is not set in environment variables');
     }
     genAI = new GoogleGenerativeAI(apiKey);
-    // Gemini 3 Flash 사용 (2025년 12월 출시)
-    model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    // Gemini 3.0 Flash 사용
+    model = genAI.getGenerativeModel({ model: 'gemini-3.0-flash' });
   }
   return model;
 }
