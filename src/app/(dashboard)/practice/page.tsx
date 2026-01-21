@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { MATH_TOPICS, FLOW_CHANNELS, MathTopic, FlowChannel, ProblemWithIRT } from '@/types';
+import { MathText } from '@/components/ui/math';
 
 // 학습 세션 타입 정의
 interface LearningSession {
@@ -401,11 +402,13 @@ export default function PracticePage() {
                 {MATH_TOPICS[diagnosticProblem.topic]}
               </Badge>
 
-              <h2 className="text-xl font-medium mb-6">{diagnosticProblem.content}</h2>
+              <MathText className="text-xl font-medium mb-6">
+                {diagnosticProblem.content}
+              </MathText>
 
               {diagnosticProblem.latex && (
-                <div className="p-4 bg-gray-50 rounded-lg text-lg font-mono mb-6">
-                  {diagnosticProblem.latex}
+                <div className="p-4 bg-gray-50 rounded-lg text-lg mb-6 flex justify-center">
+                  <MathText>{diagnosticProblem.latex}</MathText>
                 </div>
               )}
 
@@ -414,12 +417,12 @@ export default function PracticePage() {
                   <button
                     key={index}
                     onClick={() => submitDiagnosticAnswer(option)}
-                    className="p-4 text-left rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all"
+                    className="p-4 text-left rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all flex items-center"
                   >
                     <span className="font-medium mr-3">
                       {String.fromCharCode(65 + index)}.
                     </span>
-                    {option}
+                    <MathText>{option}</MathText>
                   </button>
                 ))}
               </div>
@@ -577,10 +580,12 @@ export default function PracticePage() {
                     문제 {sessionStats.problemsAttempted + 1} / {selectedSession?.problemCount}
                   </span>
                 </div>
-                <h2 className="text-xl font-medium mb-4">{currentProblem.content}</h2>
+                <MathText className="text-xl font-medium mb-4">
+                  {currentProblem.content}
+                </MathText>
                 {currentProblem.latex && (
-                  <div className="p-4 bg-gray-50 rounded-lg text-lg font-mono">
-                    {currentProblem.latex}
+                  <div className="p-4 bg-gray-50 rounded-lg text-lg flex justify-center">
+                    <MathText>{currentProblem.latex}</MathText>
                   </div>
                 )}
               </div>
@@ -597,7 +602,7 @@ export default function PracticePage() {
                       key={index}
                       onClick={() => !showResult && setSelectedAnswer(option)}
                       disabled={showResult}
-                      className={`w-full p-4 text-left rounded-lg border-2 transition-all ${
+                      className={`w-full p-4 text-left rounded-lg border-2 transition-all flex items-center ${
                         isCorrect
                           ? 'border-green-500 bg-green-50'
                           : isWrong
@@ -610,9 +615,9 @@ export default function PracticePage() {
                       <span className="font-medium mr-3">
                         {String.fromCharCode(65 + index)}.
                       </span>
-                      {option}
-                      {isCorrect && <span className="float-right text-green-600">✓ 정답</span>}
-                      {isWrong && <span className="float-right text-red-600">✗</span>}
+                      <MathText className="flex-1">{option}</MathText>
+                      {isCorrect && <span className="ml-auto text-green-600">✓ 정답</span>}
+                      {isWrong && <span className="ml-auto text-red-600">✗</span>}
                     </button>
                   );
                 })}
@@ -622,7 +627,7 @@ export default function PracticePage() {
               {showResult && (
                 <div className="mb-8 p-4 bg-blue-50 rounded-lg">
                   <h3 className="font-medium mb-2">💡 풀이</h3>
-                  <p className="text-gray-700">{currentProblem.solution}</p>
+                  <MathText className="text-gray-700">{currentProblem.solution}</MathText>
                 </div>
               )}
 
