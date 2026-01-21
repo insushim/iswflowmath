@@ -132,6 +132,7 @@ export default function PracticePage() {
     topic: string;
   } | null>(null);
   const [diagnosticAnswers, setDiagnosticAnswers] = useState<boolean[]>([]);
+  const [previousProblems, setPreviousProblems] = useState<string[]>([]); // 이전 문제 내용 저장 (중복 방지)
 
   // 몰입 문제 상태
   const [selectedSession, setSelectedSession] = useState<ImmersionSession | null>(null);
@@ -209,17 +210,42 @@ export default function PracticePage() {
   const startDiagnostic = async (grade: number) => {
     setDiagnosticProgress(0);
     setDiagnosticAnswers([]);
-    await generateDiagnosticProblem(grade, 0);
+    setPreviousProblems([]); // 이전 문제 목록 초기화
+    await generateDiagnosticProblem(grade, 0, []);
   };
 
-  // 진단 문제 생성
-  const generateDiagnosticProblem = async (grade: number, currentProgress: number) => {
+  // 진단 문제 생성 (중복 방지 기능 포함)
+  const generateDiagnosticProblem = async (
+    grade: number,
+    currentProgress: number,
+    prevProblems: string[]
+  ) => {
     setProblemLoading(true);
 
     try {
-      const topics = ['arithmetic', 'fractions', 'algebra', 'geometry', 'functions'];
-      const topic = topics[currentProgress % topics.length];
-      const currentTheta = diagnosticAnswers.filter(Boolean).length * 0.4 - 1;
+      // 10개 진단 문제에 대해 다양한 주제 순환 (중복 없이)
+      const diagnosticTopics = [
+        'arithmetic',   // 1번: 연산
+        'fractions',    // 2번: 분수
+        'geometry',     // 3번: 도형
+        'decimals',     // 4번: 소수
+        'statistics',   // 5번: 통계
+        'algebra',      // 6번: 대수 (중학교 이상)
+        'fractions',    // 7번: 분수 응용
+        'geometry',     // 8번: 도형 응용
+        'arithmetic',   // 9번: 연산 응용
+        'probability',  // 10번: 확률
+      ];
+
+      // 학년에 따라 주제 조정 (초등학교는 algebra, functions 제외)
+      let topic = diagnosticTopics[currentProgress];
+      if (grade <= 6 && (topic === 'algebra' || topic === 'functions')) {
+        topic = 'arithmetic'; // 초등학생에게는 연산으로 대체
+      }
+
+      const currentTheta = prevProblems.length > 0
+        ? (diagnosticAnswers.filter(Boolean).length * 0.4 - 1)
+        : 0;
 
       const response = await fetch('/api/problems/generate', {
         method: 'POST',
@@ -228,30 +254,75 @@ export default function PracticePage() {
           topic,
           theta: currentTheta,
           grade,
+          previous_problems: prevProblems, // 이전 문제 내용 전달 (중복 방지)
         }),
       });
 
       if (!response.ok) throw new Error('Failed to generate');
 
       const data = await response.json();
+
+      // 생성된 문제 내용 저장 (다음 문제 생성 시 중복 방지에 사용)
+      const newProblemContent = data.problem.content;
+      const updatedPrevProblems = [...prevProblems, newProblemContent];
+      setPreviousProblems(updatedPrevProblems);
+
       setDiagnosticProblem({
-        content: data.problem.content,
+        content: newProblemContent,
         options: data.problem.options,
         correct_answer: data.problem.correct_answer,
         topic: data.problem.topic,
       });
     } catch (error) {
       console.error('Error:', error);
-      // 폴백
-      setDiagnosticProblem({
-        content: `${grade}학년 수준 진단 문제 ${currentProgress + 1}: 다음을 계산하시오. $${Math.floor(Math.random() * 50) + 10} + ${Math.floor(Math.random() * 50) + 10}$`,
-        options: ['75', '82', '68', '91'],
-        correct_answer: '75',
-        topic: 'arithmetic',
-      });
+      // 폴백: 학년별 다양한 문제 (중복 방지)
+      const fallbackProblem = generateFallbackDiagnosticProblem(grade, currentProgress, prevProblems);
+      setPreviousProblems([...prevProblems, fallbackProblem.content]);
+      setDiagnosticProblem(fallbackProblem);
     } finally {
       setProblemLoading(false);
     }
+  };
+
+  // 폴백 진단 문제 생성 (API 실패 시)
+  const generateFallbackDiagnosticProblem = (
+    grade: number,
+    index: number,
+    prevProblems: string[]
+  ): { content: string; options: string[]; correct_answer: string; topic: string } => {
+    // 학년별 폴백 문제 풀 (절대 중복되지 않도록 인덱스 기반)
+    const grade6Problems = [
+      { content: '어떤 물건의 정가가 10,000원입니다. 20% 할인하면 판매 가격은?', options: ['8,000원', '7,000원', '9,000원', '6,000원'], correct_answer: '8,000원', topic: 'fractions' },
+      { content: '3:5 = 9:□ 에서 □에 들어갈 수는?', options: ['15', '12', '18', '10'], correct_answer: '15', topic: 'algebra' },
+      { content: '반지름이 7cm인 원의 넓이는? (원주율 = 3)', options: ['147cm²', '154cm²', '140cm²', '163cm²'], correct_answer: '147cm²', topic: 'geometry' },
+      { content: '$\\frac{2}{3} ÷ \\frac{1}{4}$의 값은?', options: ['$\\frac{8}{3}$', '$\\frac{2}{12}$', '$\\frac{1}{6}$', '$\\frac{3}{8}$'], correct_answer: '$\\frac{8}{3}$', topic: 'fractions' },
+      { content: '4.8 ÷ 1.2의 값은?', options: ['4', '3', '5', '6'], correct_answer: '4', topic: 'decimals' },
+      { content: '시속 60km로 2시간 30분 동안 이동한 거리는?', options: ['150km', '120km', '180km', '140km'], correct_answer: '150km', topic: 'arithmetic' },
+      { content: '전체의 25%가 50일 때, 전체는?', options: ['200', '150', '250', '100'], correct_answer: '200', topic: 'fractions' },
+      { content: '윗변 6cm, 아랫변 10cm, 높이 4cm인 사다리꼴의 넓이는?', options: ['32cm²', '28cm²', '36cm²', '24cm²'], correct_answer: '32cm²', topic: 'geometry' },
+      { content: '12, 15, 18, 21, □ 에서 □에 들어갈 수는?', options: ['24', '23', '25', '22'], correct_answer: '24', topic: 'arithmetic' },
+      { content: '삼각형의 세 각이 50°, 60°, □°일 때 □는?', options: ['70', '80', '65', '75'], correct_answer: '70', topic: 'geometry' },
+    ];
+
+    const grade7Problems = [
+      { content: '방정식 $2x + 5 = 13$의 해는?', options: ['4', '3', '5', '6'], correct_answer: '4', topic: 'algebra' },
+      { content: '(-3) × (-4) + (-2)의 값은?', options: ['10', '14', '8', '12'], correct_answer: '10', topic: 'arithmetic' },
+      { content: '점 A(-2, 3)은 몇 사분면에 있는가?', options: ['제2사분면', '제1사분면', '제3사분면', '제4사분면'], correct_answer: '제2사분면', topic: 'geometry' },
+      { content: '|-7| + |3|의 값은?', options: ['10', '4', '-4', '-10'], correct_answer: '10', topic: 'arithmetic' },
+      { content: '일차방정식 $3x - 2 = x + 6$의 해는?', options: ['4', '2', '3', '5'], correct_answer: '4', topic: 'algebra' },
+      { content: '두 점 (1, 2), (4, 6) 사이의 거리는?', options: ['5', '4', '6', '7'], correct_answer: '5', topic: 'geometry' },
+      { content: '$\\frac{2}{3} + \\frac{1}{6}$의 값은?', options: ['$\\frac{5}{6}$', '$\\frac{1}{2}$', '$\\frac{3}{6}$', '$\\frac{4}{6}$'], correct_answer: '$\\frac{5}{6}$', topic: 'fractions' },
+      { content: '정비례 $y = 3x$에서 $x = 4$일 때 $y$의 값은?', options: ['12', '7', '9', '15'], correct_answer: '12', topic: 'functions' },
+      { content: '다항식 $3a + 2b - a + 5b$를 간단히 하면?', options: ['$2a + 7b$', '$4a + 7b$', '$2a + 3b$', '$4a + 3b$'], correct_answer: '$2a + 7b$', topic: 'algebra' },
+      { content: '자료 2, 4, 6, 8, 10의 평균은?', options: ['6', '5', '7', '8'], correct_answer: '6', topic: 'statistics' },
+    ];
+
+    // 학년에 맞는 문제 풀 선택
+    let problems = grade6Problems;
+    if (grade >= 7) problems = grade7Problems;
+
+    // 인덱스로 고유한 문제 선택 (절대 중복 없음)
+    return problems[index % problems.length];
   };
 
   // 진단 답안 제출
@@ -269,7 +340,8 @@ export default function PracticePage() {
       // 진단 완료
       await completeDiagnostic(newAnswers);
     } else {
-      await generateDiagnosticProblem(selectedGrade, newProgress);
+      // 이전 문제 목록을 함께 전달하여 중복 방지
+      await generateDiagnosticProblem(selectedGrade, newProgress, previousProblems);
     }
   };
 
