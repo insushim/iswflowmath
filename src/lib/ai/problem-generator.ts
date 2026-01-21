@@ -2,6 +2,7 @@
 // MathFlow - Gemini AI Problem Generator
 // ============================================================
 // Google Gemini API를 사용한 적응형 수학 문제 생성
+// 한국 교육과정 성취기준 DB 기반
 // ============================================================
 
 import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
@@ -12,9 +13,15 @@ import {
   GenerateProblemRequest,
   MATH_TOPICS,
 } from '@/types';
-import { GRADE_TOPICS } from '@/constants';
 import { generateIRTParameters, calculateTargetDifficulty } from '@/lib/irt';
 import { generateUUID } from '@/lib/utils';
+import {
+  CURRICULUM_DB,
+  getAllStandards,
+  getNotIncluded,
+  CurriculumStandard,
+  GRADE_DIFFICULTY_RANGE,
+} from '@/data/curriculum-standards';
 
 // Gemini AI 클라이언트 초기화
 let genAI: GoogleGenerativeAI | null = null;
@@ -27,82 +34,60 @@ function getGeminiClient(): GenerativeModel {
       throw new Error('GEMINI_API_KEY is not set in environment variables');
     }
     genAI = new GoogleGenerativeAI(apiKey);
-    // Gemini 3.0 Flash 사용
-    model = genAI.getGenerativeModel({ model: 'gemini-3.0-flash' });
+    // Gemini 2.0 Flash 사용 (안정적인 최신 버전)
+    model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
   }
   return model;
 }
 
-// 학년별 난이도 및 주제 맵핑
-const GRADE_DIFFICULTY_MAP: Record<number, { minTheta: number; maxTheta: number }> = {
-  1: { minTheta: -3, maxTheta: -2 },
-  2: { minTheta: -2.5, maxTheta: -1.5 },
-  3: { minTheta: -2, maxTheta: -1 },
-  4: { minTheta: -1.5, maxTheta: -0.5 },
-  5: { minTheta: -1, maxTheta: 0 },
-  6: { minTheta: -0.5, maxTheta: 0.5 },
-  7: { minTheta: 0, maxTheta: 1 },
-  8: { minTheta: 0.5, maxTheta: 1.5 },
-  9: { minTheta: 1, maxTheta: 2 },
-  10: { minTheta: 1.5, maxTheta: 2.5 },
-  11: { minTheta: 2, maxTheta: 3 },
-  12: { minTheta: 2.5, maxTheta: 3 },
-};
+// 학년에 맞는 성취기준 랜덤 선택
+function selectRandomStandard(grade: number): CurriculumStandard | null {
+  const standards = getAllStandards(grade);
+  if (standards.length === 0) return null;
+  return standards[Math.floor(Math.random() * standards.length)];
+}
 
-// 주제별 프롬프트 생성
-function getTopicPrompt(topic: MathTopic, grade: number): string {
-  const topicPrompts: Record<MathTopic, (grade: number) => string> = {
-    arithmetic: (g) => {
-      if (g <= 2) return '한 자리 수의 덧셈과 뺄셈';
-      if (g <= 4) return '두 자리 수 이상의 사칙연산';
-      return '복잡한 사칙연산과 연산 순서';
-    },
-    fractions: (g) => {
-      if (g <= 4) return '단위분수와 진분수의 이해';
-      if (g <= 6) return '분수의 덧셈, 뺄셈, 곱셈, 나눗셈';
-      return '복잡한 분수 계산과 분수 방정식';
-    },
-    decimals: (g) => {
-      if (g <= 4) return '소수의 이해와 소수점 자리';
-      if (g <= 6) return '소수의 사칙연산';
-      return '순환소수와 소수의 응용';
-    },
-    geometry: (g) => {
-      if (g <= 4) return '기본 도형의 특징과 둘레';
-      if (g <= 6) return '도형의 넓이와 부피';
-      if (g <= 9) return '피타고라스 정리와 도형의 성질';
-      return '원, 다각형의 성질과 좌표기하학';
-    },
-    algebra: (g) => {
-      if (g <= 6) return '미지수를 사용한 간단한 식';
-      if (g <= 8) return '일차방정식과 연립방정식';
-      if (g <= 10) return '이차방정식과 부등식';
-      return '고차방정식과 복잡한 대수 문제';
-    },
-    functions: (g) => {
-      if (g <= 8) return '함수의 기본 개념과 그래프';
-      if (g <= 10) return '일차함수와 이차함수';
-      return '다항함수, 지수함수, 로그함수';
-    },
-    statistics: (g) => {
-      if (g <= 6) return '평균, 중앙값, 최빈값';
-      if (g <= 9) return '도수분포표와 상관관계';
-      return '확률분포와 통계적 추론';
-    },
-    probability: (g) => {
-      if (g <= 6) return '경우의 수와 간단한 확률';
-      if (g <= 9) return '확률의 덧셈과 곱셈 법칙';
-      return '조건부확률과 베이즈 정리';
-    },
-    calculus: () => '미분과 적분의 기초',
-    vectors: () => '벡터의 연산과 내적, 외적',
-    sequences: (g) => {
-      if (g <= 10) return '등차수열과 등비수열';
-      return '급수와 수열의 극한';
-    },
+// 주제에 맞는 성취기준 선택
+function selectStandardByTopic(grade: number, topic: MathTopic): CurriculumStandard | null {
+  const curriculum = CURRICULUM_DB[grade];
+  if (!curriculum) return null;
+
+  // 주제와 영역 매핑
+  const topicDomainMap: Record<MathTopic, string[]> = {
+    arithmetic: ['수와 연산', '정수와 유리수', '다항식'],
+    fractions: ['수와 연산', '분수'],
+    decimals: ['수와 연산', '소수'],
+    geometry: ['도형', '도형의 닮음', '기하'],
+    algebra: ['문자와 식', '방정식과 부등식', '변화와 관계'],
+    functions: ['함수', '좌표와 그래프'],
+    statistics: ['통계', '자료와 가능성'],
+    probability: ['확률', '자료와 가능성'],
+    calculus: ['미분', '적분', '미적분 심화'],
+    vectors: ['기하', '벡터'],
+    sequences: ['수열'],
   };
 
-  return topicPrompts[topic](grade);
+  const relevantDomains = topicDomainMap[topic] || [];
+  const allStandards: CurriculumStandard[] = [];
+
+  // 1학기와 2학기 모두에서 관련 영역의 성취기준 수집
+  for (const domainName of Object.keys(curriculum.semester1.domains)) {
+    if (relevantDomains.some(d => domainName.includes(d) || d.includes(domainName))) {
+      allStandards.push(...curriculum.semester1.domains[domainName].standards);
+    }
+  }
+  for (const domainName of Object.keys(curriculum.semester2.domains)) {
+    if (relevantDomains.some(d => domainName.includes(d) || d.includes(domainName))) {
+      allStandards.push(...curriculum.semester2.domains[domainName].standards);
+    }
+  }
+
+  if (allStandards.length === 0) {
+    // 관련 영역이 없으면 랜덤 선택
+    return selectRandomStandard(grade);
+  }
+
+  return allStandards[Math.floor(Math.random() * allStandards.length)];
 }
 
 // 난이도 설명 생성
@@ -115,8 +100,15 @@ function getDifficultyDescription(targetB: number): string {
   return '최상위 수준의';
 }
 
+// 학년 라벨 생성
+function getGradeLabel(grade: number): string {
+  if (grade <= 6) return `초등학교 ${grade}학년`;
+  if (grade <= 9) return `중학교 ${grade - 6}학년`;
+  return `고등학교 ${grade - 9}학년`;
+}
+
 /**
- * Gemini AI를 사용하여 수학 문제 생성
+ * Gemini AI를 사용하여 수학 문제 생성 (성취기준 기반)
  */
 export async function generateProblem(
   request: GenerateProblemRequest
@@ -129,45 +121,60 @@ export async function generateProblem(
   // IRT 파라미터 생성
   const irt = generateIRTParameters(targetB, grade);
 
-  // 주제 및 난이도 설명
-  const topicName = MATH_TOPICS[topic];
-  const topicDetail = getTopicPrompt(topic, grade);
+  // 성취기준 선택
+  const standard = selectStandardByTopic(grade, topic);
+  const notIncluded = getNotIncluded(grade);
+
+  // 학년 라벨
+  const gradeLabel = getGradeLabel(grade);
   const difficultyDesc = getDifficultyDescription(targetB);
 
   // 이전 문제 피하기 위한 지시
   const avoidPrevious =
     previous_problems.length > 0
-      ? `\n주의: 다음과 같은 유형의 문제는 피해주세요: ${previous_problems.slice(-3).join(', ')}`
+      ? `\n\n⚠️ 주의: 다음과 같은 유형의 문제는 피해주세요: ${previous_problems.slice(-3).join(', ')}`
       : '';
 
-  // Gemini 프롬프트 생성
-  const prompt = `당신은 한국 ${grade}학년 학생을 위한 수학 문제를 만드는 전문가입니다.
+  // Gemini 프롬프트 생성 (성취기준 기반)
+  const prompt = `당신은 한국 ${gradeLabel} 학생을 위한 수학 문제를 만드는 교육 전문가입니다.
 
-요구사항:
-- 주제: ${topicName} (${topicDetail})
+## 📚 한국 교육과정 성취기준 정보
+
+${standard ? `
+### 적용할 성취기준:
+- 코드: ${standard.code}
+- 내용: ${standard.description}
+- 핵심 키워드: ${standard.keywords.join(', ')}
+- 예시 문제 유형: ${standard.examples.join(' / ')}
+` : ''}
+
+### ❌ 이 학년에서 다루지 않는 내용 (절대 포함 금지):
+${notIncluded.map(item => `- ${item}`).join('\n')}
+
+## 📋 문제 생성 요구사항:
+- 학년: ${gradeLabel}
+- 주제: ${MATH_TOPICS[topic]}
 - 난이도: ${difficultyDesc} (IRT b=${targetB.toFixed(2)})
-- 학년: ${grade}학년
 ${avoidPrevious}
+
+## ⚠️ 중요 규칙:
+1. **반드시 위 성취기준 범위 내에서만 문제를 출제**하세요
+2. **이 학년에서 다루지 않는 내용은 절대 사용하지 마세요**
+3. ${grade}학년 학생이 배운 개념으로만 풀 수 있어야 합니다
+4. 문제는 한국어로 작성하고, 수식은 LaTeX 형식 사용
+5. 실생활 연계 문제를 권장합니다
 
 다음 JSON 형식으로 문제를 생성해주세요:
 
 {
-  "content": "문제 내용 (한국어로, LaTeX 수식 사용 가능)",
+  "content": "문제 내용 (한국어, LaTeX 수식 가능)",
   "latex": "수식이 있다면 LaTeX 형식 (없으면 null)",
   "options": ["보기1", "보기2", "보기3", "보기4"],
-  "correct_answer": "정답 (보기 중 하나)",
-  "solution": "상세한 풀이 설명 (한국어)",
+  "correct_answer": "정답 (보기 중 하나와 정확히 일치)",
+  "solution": "상세한 풀이 설명",
   "hints": ["힌트1", "힌트2", "힌트3"],
-  "subtopic": "세부 주제"
+  "subtopic": "세부 주제 (성취기준 기반)"
 }
-
-주의사항:
-1. 문제는 반드시 한국어로 작성
-2. 수학 기호는 LaTeX 형식 사용 (예: $x^2$, $\\frac{a}{b}$)
-3. 보기는 반드시 4개, 정답은 보기 중 하나
-4. 풀이는 단계별로 자세히 설명
-5. 힌트는 점진적으로 더 많은 정보 제공
-6. 난이도에 맞는 적절한 문제 생성
 
 JSON만 반환해주세요.`;
 
@@ -195,7 +202,7 @@ JSON만 반환해주세요.`;
       solution: parsed.solution,
       hints: parsed.hints || [],
       topic,
-      subtopic: parsed.subtopic || topicDetail,
+      subtopic: parsed.subtopic || (standard?.description || MATH_TOPICS[topic]),
       irt,
       created_at: new Date().toISOString(),
     };
@@ -204,127 +211,139 @@ JSON만 반환해주세요.`;
   } catch (error) {
     console.error('Error generating problem with Gemini:', error);
 
-    // 폴백: 기본 문제 반환
-    return generateFallbackProblem(topic, grade, irt);
+    // 폴백: 성취기준 기반 기본 문제 반환
+    return generateFallbackProblem(topic, grade, irt, standard);
   }
 }
 
 /**
- * API 실패 시 폴백 문제 생성
+ * API 실패 시 폴백 문제 생성 (성취기준 기반)
  */
 function generateFallbackProblem(
   topic: MathTopic,
   grade: number,
-  irt: IRTParameters
+  irt: IRTParameters,
+  standard: CurriculumStandard | null
 ): ProblemWithIRT {
-  // 기본 문제 풀 (주제별)
-  const fallbackProblems: Record<MathTopic, () => Partial<ProblemWithIRT>> = {
-    arithmetic: () => {
-      const a = Math.floor(Math.random() * 50) + 10;
-      const b = Math.floor(Math.random() * 50) + 10;
-      const answer = a + b;
-      return {
-        content: `${a} + ${b} = ?`,
-        options: [
-          String(answer),
-          String(answer + 10),
-          String(answer - 10),
-          String(answer + 5),
-        ],
-        correct_answer: String(answer),
-        solution: `${a}와 ${b}를 더하면 ${answer}입니다.`,
-        hints: ['덧셈을 해보세요', `${a}에 ${b}를 더합니다`, `정답은 ${answer}입니다`],
-        subtopic: '덧셈',
-      };
-    },
-    fractions: () => ({
-      content: '다음 분수를 기약분수로 나타내시오: $\\frac{6}{8}$',
-      latex: '\\frac{6}{8}',
-      options: ['$\\frac{3}{4}$', '$\\frac{2}{3}$', '$\\frac{1}{2}$', '$\\frac{4}{5}$'],
-      correct_answer: '$\\frac{3}{4}$',
-      solution: '6과 8의 최대공약수는 2입니다. 분자와 분모를 2로 나누면 3/4가 됩니다.',
-      hints: ['최대공약수를 찾아보세요', '6과 8의 공약수는 2입니다', '분자 분모를 2로 나누세요'],
-      subtopic: '기약분수',
+  // 학년별 폴백 문제
+  const gradeProblems: Record<number, () => Partial<ProblemWithIRT>> = {
+    // 초등학교 1학년
+    1: () => ({
+      content: '사과가 5개 있습니다. 엄마가 3개를 더 주셨습니다. 사과는 모두 몇 개인가요?',
+      options: ['7개', '8개', '6개', '9개'],
+      correct_answer: '8개',
+      solution: '5 + 3 = 8이므로 사과는 모두 8개입니다.',
+      hints: ['5에 3을 더하세요', '손가락으로 세어보세요', '정답은 8개입니다'],
+      subtopic: '한 자리 수의 덧셈',
     }),
-    decimals: () => ({
-      content: '0.5 + 0.3 = ?',
-      options: ['0.8', '0.7', '0.9', '0.6'],
-      correct_answer: '0.8',
-      solution: '소수점 이하 숫자를 더합니다. 5 + 3 = 8이므로 0.8입니다.',
-      hints: ['소수점 위치를 맞추세요', '5 + 3을 계산하세요', '정답은 0.8입니다'],
-      subtopic: '소수의 덧셈',
+    // 초등학교 2학년
+    2: () => ({
+      content: '구구단 7단에서 7 × 6의 값은 얼마인가요?',
+      options: ['42', '48', '36', '49'],
+      correct_answer: '42',
+      solution: '7 × 6 = 42입니다. 7을 6번 더하면 7 + 7 + 7 + 7 + 7 + 7 = 42입니다.',
+      hints: ['7을 6번 더해보세요', '7 × 5 = 35에 7을 더하세요', '정답은 42입니다'],
+      subtopic: '구구단',
     }),
-    geometry: () => ({
-      content: '한 변의 길이가 5cm인 정사각형의 넓이는?',
-      options: ['25cm²', '20cm²', '10cm²', '15cm²'],
-      correct_answer: '25cm²',
-      solution: '정사각형의 넓이 = 한 변의 길이 × 한 변의 길이 = 5 × 5 = 25cm²',
-      hints: ['정사각형 넓이 공식을 사용하세요', '변의 길이를 제곱합니다', '5 × 5 = 25'],
-      subtopic: '넓이',
+    // 초등학교 3학년
+    3: () => ({
+      content: '456 + 278을 계산하세요.',
+      options: ['734', '724', '744', '714'],
+      correct_answer: '734',
+      solution: '일의 자리: 6 + 8 = 14 (4를 쓰고 1 받아올림)\n십의 자리: 5 + 7 + 1 = 13 (3을 쓰고 1 받아올림)\n백의 자리: 4 + 2 + 1 = 7\n따라서 734입니다.',
+      hints: ['일의 자리부터 계산하세요', '받아올림을 잊지 마세요', '각 자리수를 더하세요'],
+      subtopic: '세 자리 수의 덧셈',
     }),
-    algebra: () => ({
-      content: '방정식 $2x + 4 = 10$의 해를 구하시오.',
-      latex: '2x + 4 = 10',
-      options: ['3', '4', '2', '5'],
-      correct_answer: '3',
-      solution: '2x + 4 = 10\n2x = 10 - 4\n2x = 6\nx = 3',
-      hints: ['4를 이항하세요', '2x = 6이 됩니다', '양변을 2로 나누세요'],
+    // 초등학교 4학년
+    4: () => ({
+      content: '삼각형의 세 각의 크기가 각각 50°, 70°, □°입니다. □에 알맞은 수를 구하세요.',
+      options: ['60', '50', '70', '80'],
+      correct_answer: '60',
+      solution: '삼각형의 세 각의 합은 180°입니다.\n50° + 70° + □° = 180°\n□° = 180° - 50° - 70° = 60°',
+      hints: ['삼각형의 세 각의 합은 180°입니다', '50 + 70 = 120입니다', '180 - 120을 계산하세요'],
+      subtopic: '삼각형의 내각의 합',
+    }),
+    // 초등학교 5학년
+    5: () => ({
+      content: '밑변이 12cm, 높이가 8cm인 삼각형의 넓이를 구하세요.',
+      options: ['48cm²', '96cm²', '20cm²', '24cm²'],
+      correct_answer: '48cm²',
+      solution: '삼각형의 넓이 = (밑변 × 높이) ÷ 2\n= (12 × 8) ÷ 2\n= 96 ÷ 2\n= 48cm²',
+      hints: ['삼각형 넓이 공식을 사용하세요', '밑변 × 높이를 먼저 계산하세요', '그 결과를 2로 나누세요'],
+      subtopic: '삼각형의 넓이',
+    }),
+    // 초등학교 6학년
+    6: () => ({
+      content: '어떤 물건의 원가가 20,000원입니다. 25%의 이익을 붙여 팔면 판매 가격은 얼마인가요?',
+      options: ['25,000원', '24,000원', '22,500원', '27,500원'],
+      correct_answer: '25,000원',
+      solution: '이익 = 원가 × 이익률 = 20,000 × 0.25 = 5,000원\n판매 가격 = 원가 + 이익 = 20,000 + 5,000 = 25,000원',
+      hints: ['25%를 소수로 바꾸면 0.25입니다', '원가에 이익률을 곱해 이익을 구하세요', '원가에 이익을 더하세요'],
+      subtopic: '비율과 백분율',
+    }),
+    // 중학교 1학년
+    7: () => ({
+      content: '방정식 $3x - 7 = 14$를 풀어 $x$의 값을 구하세요.',
+      latex: '3x - 7 = 14',
+      options: ['7', '8', '6', '9'],
+      correct_answer: '7',
+      solution: '3x - 7 = 14\n3x = 14 + 7 (양변에 7을 더함)\n3x = 21\nx = 7 (양변을 3으로 나눔)',
+      hints: ['먼저 -7을 이항하세요', '3x = 21이 됩니다', '양변을 3으로 나누세요'],
       subtopic: '일차방정식',
     }),
-    functions: () => ({
-      content: '$f(x) = 2x + 1$일 때, $f(3)$의 값은?',
-      latex: 'f(x) = 2x + 1',
-      options: ['7', '6', '8', '5'],
-      correct_answer: '7',
-      solution: 'f(3) = 2(3) + 1 = 6 + 1 = 7',
-      hints: ['x에 3을 대입하세요', '2 × 3 = 6', '6 + 1 = 7'],
-      subtopic: '함수값',
+    // 중학교 2학년
+    8: () => ({
+      content: '연립방정식 $\\begin{cases} x + y = 7 \\\\ 2x - y = 5 \\end{cases}$를 풀어 $x$와 $y$의 값을 구하세요.',
+      latex: '\\begin{cases} x + y = 7 \\\\ 2x - y = 5 \\end{cases}',
+      options: ['x = 4, y = 3', 'x = 3, y = 4', 'x = 5, y = 2', 'x = 2, y = 5'],
+      correct_answer: 'x = 4, y = 3',
+      solution: '두 식을 더하면: x + y + 2x - y = 7 + 5\n3x = 12, x = 4\n첫 번째 식에 대입: 4 + y = 7, y = 3',
+      hints: ['가감법을 사용하세요', '두 식을 더하면 y가 소거됩니다', 'x를 구한 후 대입하세요'],
+      subtopic: '연립방정식',
     }),
-    statistics: () => ({
-      content: '2, 4, 6, 8, 10의 평균은?',
-      options: ['6', '5', '7', '8'],
-      correct_answer: '6',
-      solution: '평균 = (2 + 4 + 6 + 8 + 10) ÷ 5 = 30 ÷ 5 = 6',
-      hints: ['모든 수를 더하세요', '합은 30입니다', '5로 나누세요'],
-      subtopic: '평균',
+    // 중학교 3학년
+    9: () => ({
+      content: '이차방정식 $x^2 - 5x + 6 = 0$의 두 근을 구하세요.',
+      latex: 'x^2 - 5x + 6 = 0',
+      options: ['x = 2 또는 x = 3', 'x = 1 또는 x = 6', 'x = -2 또는 x = -3', 'x = 2 또는 x = -3'],
+      correct_answer: 'x = 2 또는 x = 3',
+      solution: 'x² - 5x + 6 = 0\n(x - 2)(x - 3) = 0 (인수분해)\nx - 2 = 0 또는 x - 3 = 0\nx = 2 또는 x = 3',
+      hints: ['인수분해를 시도하세요', '합이 5이고 곱이 6인 두 수를 찾으세요', '(x - 2)(x - 3) = 0'],
+      subtopic: '이차방정식의 인수분해',
     }),
-    probability: () => ({
-      content: '주사위를 한 번 던질 때, 짝수가 나올 확률은?',
-      options: ['1/2', '1/3', '2/3', '1/6'],
-      correct_answer: '1/2',
-      solution: '짝수는 2, 4, 6으로 3개입니다. 전체 경우의 수는 6개이므로 확률은 3/6 = 1/2입니다.',
-      hints: ['짝수의 개수를 세세요', '경우의 수는 6입니다', '3/6을 약분하세요'],
-      subtopic: '기본 확률',
+    // 고등학교 1학년
+    10: () => ({
+      content: '복소수 $(2 + 3i)(1 - 2i)$를 계산하세요. (단, $i^2 = -1$)',
+      latex: '(2 + 3i)(1 - 2i)',
+      options: ['8 - i', '8 + i', '-4 - i', '4 + 7i'],
+      correct_answer: '8 - i',
+      solution: '(2 + 3i)(1 - 2i)\n= 2(1) + 2(-2i) + 3i(1) + 3i(-2i)\n= 2 - 4i + 3i - 6i²\n= 2 - i - 6(-1)\n= 2 - i + 6\n= 8 - i',
+      hints: ['분배법칙을 사용하세요', 'i² = -1임을 기억하세요', '실수부와 허수부를 정리하세요'],
+      subtopic: '복소수의 연산',
     }),
-    calculus: () => ({
-      content: '$f(x) = x^2$의 도함수 $f\'(x)$는?',
-      latex: 'f(x) = x^2',
-      options: ['2x', 'x', '2', 'x²'],
-      correct_answer: '2x',
-      solution: '멱함수의 미분 공식: (x^n)\' = nx^(n-1)\n따라서 (x^2)\' = 2x^1 = 2x',
-      hints: ['멱함수 미분 공식을 사용하세요', '지수를 앞으로 내립니다', '지수에서 1을 빼세요'],
-      subtopic: '미분',
+    // 고등학교 2학년
+    11: () => ({
+      content: '$\\log_2 32$의 값을 구하세요.',
+      latex: '\\log_2 32',
+      options: ['5', '4', '6', '3'],
+      correct_answer: '5',
+      solution: 'log₂ 32 = x라 하면\n2^x = 32\n32 = 2^5 이므로\nx = 5',
+      hints: ['로그의 정의를 사용하세요', '32를 2의 거듭제곱으로 나타내세요', '2^5 = 32입니다'],
+      subtopic: '로그',
     }),
-    vectors: () => ({
-      content: '벡터 $\\vec{a} = (2, 3)$과 $\\vec{b} = (4, 1)$의 합 $\\vec{a} + \\vec{b}$는?',
-      latex: '\\vec{a} + \\vec{b}',
-      options: ['(6, 4)', '(6, 2)', '(8, 4)', '(2, 4)'],
-      correct_answer: '(6, 4)',
-      solution: '벡터의 덧셈은 각 성분끼리 더합니다.\n(2, 3) + (4, 1) = (2+4, 3+1) = (6, 4)',
-      hints: ['x성분끼리 더하세요', 'y성분끼리 더하세요', '(2+4, 3+1)을 계산하세요'],
-      subtopic: '벡터 덧셈',
-    }),
-    sequences: () => ({
-      content: '첫째항이 2이고 공차가 3인 등차수열의 5번째 항은?',
-      options: ['14', '12', '15', '11'],
-      correct_answer: '14',
-      solution: '등차수열 공식: a_n = a_1 + (n-1)d\na_5 = 2 + (5-1)×3 = 2 + 12 = 14',
-      hints: ['등차수열 공식을 사용하세요', 'n=5를 대입하세요', '2 + 4×3을 계산하세요'],
-      subtopic: '등차수열',
+    // 고등학교 3학년
+    12: () => ({
+      content: '$f(x) = x^3 - 3x^2 + 2$의 도함수 $f\'(x)$를 구하세요.',
+      latex: 'f(x) = x^3 - 3x^2 + 2',
+      options: ['$3x^2 - 6x$', '$3x^2 - 6x + 2$', '$x^2 - 6x$', '$3x^2 - 3x$'],
+      correct_answer: '$3x^2 - 6x$',
+      solution: 'f(x) = x³ - 3x² + 2\nf\'(x) = 3x² - 6x (상수항 2의 도함수는 0)\n\n미분 공식: (xⁿ)\' = nxⁿ⁻¹',
+      hints: ['각 항을 미분하세요', '(x³)\' = 3x²', '상수의 미분은 0입니다'],
+      subtopic: '다항함수의 미분',
     }),
   };
 
-  const fallback = fallbackProblems[topic]();
+  const fallback = gradeProblems[grade] ? gradeProblems[grade]() : gradeProblems[6]();
 
   return {
     id: generateUUID(),
@@ -335,7 +354,7 @@ function generateFallbackProblem(
     solution: fallback.solution || '풀이를 불러올 수 없습니다.',
     hints: fallback.hints || ['힌트 없음'],
     topic,
-    subtopic: fallback.subtopic || MATH_TOPICS[topic],
+    subtopic: fallback.subtopic || (standard?.description || MATH_TOPICS[topic]),
     irt,
     created_at: new Date().toISOString(),
   };
@@ -407,48 +426,8 @@ ${problem.latex ? `수식: ${problem.latex}` : ''}
   }
 }
 
-/**
- * 문제 유형 분석
- */
-export async function analyzeProblemType(content: string): Promise<{
-  topic: MathTopic;
-  subtopic: string;
-  concepts: string[];
-}> {
-  const prompt = `다음 수학 문제를 분석해주세요:
-
-"${content}"
-
-다음 JSON 형식으로 응답해주세요:
-{
-  "topic": "arithmetic|fractions|decimals|geometry|algebra|functions|statistics|probability|calculus|vectors|sequences 중 하나",
-  "subtopic": "세부 주제",
-  "concepts": ["사용된 개념 목록"]
-}`;
-
-  try {
-    const gemini = getGeminiClient();
-    const result = await gemini.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
-
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-  } catch (error) {
-    console.error('Error analyzing problem:', error);
-  }
-
-  return {
-    topic: 'arithmetic',
-    subtopic: '기본',
-    concepts: [],
-  };
-}
-
 // ============================================================
-// 몰입 학습 문제 생성 (시간 기반)
+// 몰입 학습 문제 생성 (시간 기반, 성취기준 기반)
 // ============================================================
 
 export type ImmersionDifficulty = '5min' | '10min' | '30min' | '1hour' | '1day' | '3days' | '7days' | '1month';
@@ -512,7 +491,7 @@ const IMMERSION_CONFIG: Record<ImmersionDifficulty, ImmersionProblemConfig> = {
 };
 
 /**
- * 몰입 학습용 문제 생성 (시간 기반 난이도)
+ * 몰입 학습용 문제 생성 (시간 기반 난이도, 성취기준 기반)
  */
 export async function generateImmersionProblem(
   grade: number,
@@ -527,46 +506,61 @@ export async function generateImmersionProblem(
   estimatedTime: string;
 }> {
   const config = IMMERSION_CONFIG[difficulty];
+  const gradeLabel = getGradeLabel(grade);
 
-  // 학년에 맞는 주제 선택
-  const topicsByGrade: Record<number, string[]> = {
-    1: ['덧셈과 뺄셈', '수 세기', '기본 도형'],
-    2: ['구구단', '시간과 길이', '덧셈과 뺄셈 응용'],
-    3: ['나눗셈', '분수 기초', '평면도형'],
-    4: ['큰 수의 연산', '분수와 소수', '각도'],
-    5: ['약수와 배수', '분수 연산', '도형의 넓이'],
-    6: ['비와 비율', '원의 넓이', '입체도형'],
-    7: ['정수와 유리수', '일차방정식', '기본 도형의 성질'],
-    8: ['일차함수', '연립방정식', '삼각형의 성질'],
-    9: ['이차방정식', '피타고라스 정리', '통계'],
-    10: ['집합과 명제', '이차함수', '삼각비'],
-    11: ['지수와 로그', '삼각함수', '수열'],
-    12: ['미분', '적분', '확률과 통계'],
-  };
+  // 성취기준에서 주제 선택
+  const standard = preferredTopic
+    ? selectStandardByTopic(grade, preferredTopic)
+    : selectRandomStandard(grade);
 
-  const topics = topicsByGrade[grade] || topicsByGrade[7];
-  const selectedTopic = preferredTopic ? MATH_TOPICS[preferredTopic] : topics[Math.floor(Math.random() * topics.length)];
+  const notIncluded = getNotIncluded(grade);
 
-  const prompt = `당신은 한국 ${grade}학년 학생을 위한 **몰입 학습용** 수학 문제를 만드는 전문가입니다.
+  // 학년별 성취기준 기반 주제 목록
+  const curriculum = CURRICULUM_DB[grade];
+  let topicsList = '';
+  if (curriculum) {
+    const allDomains = [
+      ...Object.keys(curriculum.semester1.domains),
+      ...Object.keys(curriculum.semester2.domains),
+    ];
+    topicsList = allDomains.join(', ');
+  }
 
-## 몰입 학습이란?
+  const prompt = `당신은 한국 ${gradeLabel} 학생을 위한 **몰입 학습용** 수학 문제를 만드는 교육 전문가입니다.
+
+## 📚 한국 교육과정 성취기준 정보
+
+### 이 학년에서 배우는 영역:
+${topicsList}
+
+${standard ? `
+### 적용할 성취기준 (참고):
+- 코드: ${standard.code}
+- 내용: ${standard.description}
+- 핵심 키워드: ${standard.keywords.join(', ')}
+` : ''}
+
+### ❌ 이 학년에서 다루지 않는 내용 (절대 포함 금지):
+${notIncluded.map(item => `- ${item}`).join('\n')}
+
+## 🎯 몰입 학습이란?
 - 학생이 한 문제에 ${config.duration} 정도 깊이 몰두할 수 있는 문제
-- 단순 계산이 아닌, 사고력과 창의력을 요구하는 문제
+- 단순 계산이 아닌, **사고력과 창의력**을 요구하는 문제
 - 여러 단계의 추론과 문제 해결 전략이 필요한 문제
 
-## 요구사항:
-- 학년: ${grade}학년
-- 주제: ${selectedTopic}
+## 📋 요구사항:
+- 학년: ${gradeLabel}
 - 예상 풀이 시간: ${config.duration}
 - 복잡도: ${config.complexity}
 - 풀이 단계: 약 ${config.steps}단계
 - 특징: ${config.description}
 
-## 중요:
-- 단순한 사칙연산 문제가 아닌 **사고력을 요하는 문제**를 만들어주세요
-- 학생이 ${config.duration} 동안 고민하고 탐구할 수 있어야 합니다
-- ${grade}학년 수준에 맞되, 도전적이어야 합니다
-- 실생활 연계나 창의적 상황 설정을 권장합니다
+## ⚠️ 중요 규칙:
+1. **반드시 ${gradeLabel} 교육과정 범위 내에서만 출제**하세요
+2. **배우지 않은 개념(함수 f(x), 방정식 등)은 절대 사용 금지**
+3. 학생이 ${config.duration} 동안 고민하고 탐구할 수 있어야 합니다
+4. 실생활 연계나 창의적 상황 설정을 권장합니다
+5. ${gradeLabel} 수준에서 도전적이되 불가능하지 않은 문제
 
 다음 JSON 형식으로 문제를 생성해주세요:
 
@@ -574,7 +568,7 @@ export async function generateImmersionProblem(
   "content": "문제 내용 (상세하게, LaTeX 수식 사용 가능. 상황 설정과 조건을 명확히)",
   "hints": ["힌트1 (방향 제시)", "힌트2 (핵심 개념)", "힌트3 (풀이 접근법)", "힌트4 (중간 단계)", "힌트5 (거의 답에 가까운 힌트)"],
   "solution": "상세한 단계별 풀이 (${config.steps}단계 이상으로 자세히)",
-  "topic": "주제명"
+  "topic": "주제명 (성취기준 기반)"
 }
 
 JSON만 반환해주세요.`;
@@ -596,14 +590,14 @@ JSON만 반환해주세요.`;
       content: parsed.content,
       hints: parsed.hints || [],
       solution: parsed.solution,
-      topic: parsed.topic || selectedTopic,
+      topic: parsed.topic || standard?.description || '수학',
       estimatedTime: config.duration,
     };
   } catch (error) {
     console.error('Error generating immersion problem:', error);
 
     // 폴백 문제
-    return generateFallbackImmersionProblem(grade, difficulty, selectedTopic);
+    return generateFallbackImmersionProblem(grade, difficulty, standard?.description || '수학');
   }
 }
 
@@ -620,26 +614,59 @@ function generateFallbackImmersionProblem(
 } {
   const config = IMMERSION_CONFIG[difficulty];
 
-  // 학년별 폴백 문제
-  const problems: Record<string, { content: string; hints: string[]; solution: string }> = {
-    '5min': {
-      content: `철수는 사과 12개를 3명의 친구에게 똑같이 나누어 주려고 합니다. 그런데 2개가 상해서 버려야 합니다. 각 친구가 받을 수 있는 사과는 몇 개일까요? 그리고 남는 사과는 몇 개일까요?`,
-      hints: ['먼저 상한 사과를 빼세요', '남은 사과를 3으로 나누세요', '나머지를 구하세요'],
-      solution: '12 - 2 = 10개의 사과가 남습니다. 10 ÷ 3 = 3 나머지 1이므로, 각 친구는 3개씩 받고 1개가 남습니다.',
+  // 학년별 폴백 문제 (성취기준 기반)
+  const gradeProblems: Record<number, Record<string, { content: string; hints: string[]; solution: string }>> = {
+    1: {
+      '5min': {
+        content: '바구니에 사과가 8개 있습니다. 동생이 3개를 먹고, 엄마가 2개를 더 넣어주셨습니다. 바구니에 남은 사과는 몇 개인가요?',
+        hints: ['먼저 동생이 먹은 것을 빼세요', '8 - 3 = 5입니다', '그 다음 엄마가 넣어준 것을 더하세요'],
+        solution: '8 - 3 = 5 (동생이 먹은 후)\n5 + 2 = 7 (엄마가 넣어준 후)\n답: 7개',
+      },
     },
-    '10min': {
-      content: `직사각형 모양의 정원이 있습니다. 가로가 세로보다 4m 더 깁니다. 정원 둘레에 울타리를 치는데 총 32m의 울타리가 필요했습니다. 이 정원의 가로와 세로의 길이를 각각 구하고, 정원의 넓이를 구하세요.`,
-      hints: ['세로를 x라 하면 가로는?', '둘레 공식: 2(가로+세로)', '방정식을 세우세요', '넓이 = 가로 × 세로'],
-      solution: '세로를 x라 하면 가로는 x+4입니다. 둘레: 2(x + x+4) = 32, 4x + 8 = 32, x = 6. 세로 6m, 가로 10m, 넓이 60m²',
+    6: {
+      '5min': {
+        content: '어떤 물건의 원래 가격이 8,000원입니다. 20% 할인된 가격은 얼마인가요?',
+        hints: ['20%를 분수나 소수로 바꿔보세요', '할인 금액 = 원래 가격 × 할인율', '원래 가격에서 할인 금액을 빼세요'],
+        solution: '할인 금액 = 8,000 × 0.2 = 1,600원\n할인된 가격 = 8,000 - 1,600 = 6,400원',
+      },
+      '10min': {
+        content: '직사각형 모양의 정원이 있습니다. 가로가 세로보다 4m 더 깁니다. 정원 둘레에 울타리를 치는데 총 32m의 울타리가 필요했습니다. 이 정원의 넓이를 구하세요.',
+        hints: ['세로를 □라 하면 가로는 □+4입니다', '둘레 = 2 × (가로 + 세로)', '□ + □ + 4 = 16입니다', '넓이 = 가로 × 세로'],
+        solution: '둘레 = 2(가로 + 세로) = 32\n가로 + 세로 = 16\n세로를 □라 하면: □ + (□+4) = 16\n2□ = 12, □ = 6\n세로 = 6m, 가로 = 10m\n넓이 = 6 × 10 = 60m²',
+      },
+      '30min': {
+        content: '철수네 반 학생 30명이 수학, 영어 시험을 봤습니다. 수학을 80점 이상 받은 학생은 18명, 영어를 80점 이상 받은 학생은 15명, 두 과목 모두 80점 이상인 학생은 10명입니다. 두 과목 모두 80점 미만인 학생은 몇 명인가요? 벤 다이어그램을 그려서 설명하세요.',
+        hints: ['벤 다이어그램을 그려보세요', '수학만 80점 이상 = 18 - 10', '영어만 80점 이상 = 15 - 10', '전체에서 빼세요'],
+        solution: '수학만 80점 이상: 18 - 10 = 8명\n영어만 80점 이상: 15 - 10 = 5명\n둘 다 80점 이상: 10명\n80점 이상인 학생 수: 8 + 5 + 10 = 23명\n둘 다 80점 미만: 30 - 23 = 7명',
+      },
     },
-    '30min': {
-      content: `어떤 수의 제곱에서 그 수를 뺀 값이 72입니다. 이 수를 구하세요. 또한, 이 문제를 풀 수 있는 모든 방법(인수분해, 근의 공식 등)을 사용하여 풀이하고, 왜 음수 해도 답이 될 수 있는지 또는 없는지 설명하세요.`,
-      hints: ['x² - x = 72로 방정식을 세우세요', 'x² - x - 72 = 0 형태로 정리', '인수분해 또는 근의 공식 사용', '두 해 중 어떤 것이 적절한지 판단'],
-      solution: 'x² - x - 72 = 0, (x-9)(x+8) = 0, x = 9 또는 x = -8. 문제에서 "어떤 수"라고만 했으므로 -8도 가능. -8의 제곱 64에서 -8을 빼면 72.',
+    7: {
+      '5min': {
+        content: '일차방정식 $3x + 5 = 2x - 7$을 풀어 $x$의 값을 구하세요.',
+        hints: ['x가 있는 항을 한쪽으로 모으세요', '상수항을 다른 쪽으로 모으세요', 'x의 계수로 나누세요'],
+        solution: '3x + 5 = 2x - 7\n3x - 2x = -7 - 5\nx = -12',
+      },
+      '10min': {
+        content: '좌표평면에서 두 점 A(2, 3)과 B(5, 7) 사이의 거리를 구하세요.',
+        hints: ['두 점 사이의 거리 공식을 사용하세요', 'x좌표의 차와 y좌표의 차를 각각 구하세요', '피타고라스 정리를 적용하세요'],
+        solution: 'x좌표의 차: 5 - 2 = 3\ny좌표의 차: 7 - 3 = 4\n거리 = √(3² + 4²) = √(9 + 16) = √25 = 5',
+      },
+    },
+    9: {
+      '30min': {
+        content: '이차방정식 $x^2 - 6x + k = 0$이 중근을 가질 때, 상수 $k$의 값과 그 중근을 구하세요. 또한 이차방정식이 중근을 가지는 조건을 설명하세요.',
+        hints: ['중근 조건: 판별식 D = 0', 'D = b² - 4ac', 'a = 1, b = -6, c = k를 대입하세요', '중근은 x = -b/2a'],
+        solution: '판별식 D = b² - 4ac = (-6)² - 4(1)(k) = 36 - 4k\n중근 조건: D = 0\n36 - 4k = 0, k = 9\n중근: x = -b/2a = 6/2 = 3\n\n이차방정식이 중근을 가지는 조건은 판별식 D = b² - 4ac = 0일 때입니다.',
+      },
     },
   };
 
-  const fallback = problems[difficulty] || problems['5min'];
+  const gradeFallbacks = gradeProblems[grade] || gradeProblems[6];
+  const fallback = gradeFallbacks[difficulty] || gradeFallbacks['5min'] || {
+    content: '문제를 불러오는 중입니다.',
+    hints: ['힌트를 불러오는 중입니다'],
+    solution: '풀이를 불러오는 중입니다.',
+  };
 
   return {
     content: fallback.content,
