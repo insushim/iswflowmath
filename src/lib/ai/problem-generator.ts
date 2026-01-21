@@ -27,7 +27,8 @@ function getGeminiClient(): GenerativeModel {
       throw new Error('GEMINI_API_KEY is not set in environment variables');
     }
     genAI = new GoogleGenerativeAI(apiKey);
-    model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    // Gemini 3 Flash 사용 (2025년 12월 출시)
+    model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
   }
   return model;
 }
@@ -443,5 +444,208 @@ export async function analyzeProblemType(content: string): Promise<{
     topic: 'arithmetic',
     subtopic: '기본',
     concepts: [],
+  };
+}
+
+// ============================================================
+// 몰입 학습 문제 생성 (시간 기반)
+// ============================================================
+
+export type ImmersionDifficulty = '5min' | '10min' | '30min' | '1hour' | '1day' | '3days' | '7days' | '1month';
+
+interface ImmersionProblemConfig {
+  duration: string;
+  complexity: string;
+  steps: number;
+  description: string;
+}
+
+const IMMERSION_CONFIG: Record<ImmersionDifficulty, ImmersionProblemConfig> = {
+  '5min': {
+    duration: '5분',
+    complexity: '기본적인 개념 적용',
+    steps: 2,
+    description: '짧은 시간 내에 풀 수 있는 기초 문제',
+  },
+  '10min': {
+    duration: '10분',
+    complexity: '여러 개념의 간단한 결합',
+    steps: 3,
+    description: '약간의 사고력이 필요한 응용 문제',
+  },
+  '30min': {
+    duration: '30분',
+    complexity: '복합적인 문제 해결',
+    steps: 5,
+    description: '여러 단계의 추론이 필요한 심화 문제',
+  },
+  '1hour': {
+    duration: '1시간',
+    complexity: '고도의 논리적 사고 필요',
+    steps: 8,
+    description: '깊은 분석과 창의적 접근이 필요한 도전 문제',
+  },
+  '1day': {
+    duration: '하루',
+    complexity: '연구 수준의 탐구',
+    steps: 15,
+    description: '장시간 몰두해야 하는 탐구형 문제',
+  },
+  '3days': {
+    duration: '3일',
+    complexity: '프로젝트형 문제',
+    steps: 25,
+    description: '여러 개념을 통합하는 프로젝트 문제',
+  },
+  '7days': {
+    duration: '일주일',
+    complexity: '심층 연구 문제',
+    steps: 40,
+    description: '수학적 증명이나 일반화가 필요한 연구 문제',
+  },
+  '1month': {
+    duration: '한 달',
+    complexity: '올림피아드/경시대회 수준',
+    steps: 60,
+    description: '수학 올림피아드 수준의 극도로 어려운 문제',
+  },
+};
+
+/**
+ * 몰입 학습용 문제 생성 (시간 기반 난이도)
+ */
+export async function generateImmersionProblem(
+  grade: number,
+  theta: number,
+  difficulty: ImmersionDifficulty,
+  preferredTopic?: MathTopic
+): Promise<{
+  content: string;
+  hints: string[];
+  solution: string;
+  topic: string;
+  estimatedTime: string;
+}> {
+  const config = IMMERSION_CONFIG[difficulty];
+
+  // 학년에 맞는 주제 선택
+  const topicsByGrade: Record<number, string[]> = {
+    1: ['덧셈과 뺄셈', '수 세기', '기본 도형'],
+    2: ['구구단', '시간과 길이', '덧셈과 뺄셈 응용'],
+    3: ['나눗셈', '분수 기초', '평면도형'],
+    4: ['큰 수의 연산', '분수와 소수', '각도'],
+    5: ['약수와 배수', '분수 연산', '도형의 넓이'],
+    6: ['비와 비율', '원의 넓이', '입체도형'],
+    7: ['정수와 유리수', '일차방정식', '기본 도형의 성질'],
+    8: ['일차함수', '연립방정식', '삼각형의 성질'],
+    9: ['이차방정식', '피타고라스 정리', '통계'],
+    10: ['집합과 명제', '이차함수', '삼각비'],
+    11: ['지수와 로그', '삼각함수', '수열'],
+    12: ['미분', '적분', '확률과 통계'],
+  };
+
+  const topics = topicsByGrade[grade] || topicsByGrade[7];
+  const selectedTopic = preferredTopic ? MATH_TOPICS[preferredTopic] : topics[Math.floor(Math.random() * topics.length)];
+
+  const prompt = `당신은 한국 ${grade}학년 학생을 위한 **몰입 학습용** 수학 문제를 만드는 전문가입니다.
+
+## 몰입 학습이란?
+- 학생이 한 문제에 ${config.duration} 정도 깊이 몰두할 수 있는 문제
+- 단순 계산이 아닌, 사고력과 창의력을 요구하는 문제
+- 여러 단계의 추론과 문제 해결 전략이 필요한 문제
+
+## 요구사항:
+- 학년: ${grade}학년
+- 주제: ${selectedTopic}
+- 예상 풀이 시간: ${config.duration}
+- 복잡도: ${config.complexity}
+- 풀이 단계: 약 ${config.steps}단계
+- 특징: ${config.description}
+
+## 중요:
+- 단순한 사칙연산 문제가 아닌 **사고력을 요하는 문제**를 만들어주세요
+- 학생이 ${config.duration} 동안 고민하고 탐구할 수 있어야 합니다
+- ${grade}학년 수준에 맞되, 도전적이어야 합니다
+- 실생활 연계나 창의적 상황 설정을 권장합니다
+
+다음 JSON 형식으로 문제를 생성해주세요:
+
+{
+  "content": "문제 내용 (상세하게, LaTeX 수식 사용 가능. 상황 설정과 조건을 명확히)",
+  "hints": ["힌트1 (방향 제시)", "힌트2 (핵심 개념)", "힌트3 (풀이 접근법)", "힌트4 (중간 단계)", "힌트5 (거의 답에 가까운 힌트)"],
+  "solution": "상세한 단계별 풀이 (${config.steps}단계 이상으로 자세히)",
+  "topic": "주제명"
+}
+
+JSON만 반환해주세요.`;
+
+  try {
+    const gemini = getGeminiClient();
+    const result = await gemini.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('Failed to parse response');
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    return {
+      content: parsed.content,
+      hints: parsed.hints || [],
+      solution: parsed.solution,
+      topic: parsed.topic || selectedTopic,
+      estimatedTime: config.duration,
+    };
+  } catch (error) {
+    console.error('Error generating immersion problem:', error);
+
+    // 폴백 문제
+    return generateFallbackImmersionProblem(grade, difficulty, selectedTopic);
+  }
+}
+
+function generateFallbackImmersionProblem(
+  grade: number,
+  difficulty: ImmersionDifficulty,
+  topic: string
+): {
+  content: string;
+  hints: string[];
+  solution: string;
+  topic: string;
+  estimatedTime: string;
+} {
+  const config = IMMERSION_CONFIG[difficulty];
+
+  // 학년별 폴백 문제
+  const problems: Record<string, { content: string; hints: string[]; solution: string }> = {
+    '5min': {
+      content: `철수는 사과 12개를 3명의 친구에게 똑같이 나누어 주려고 합니다. 그런데 2개가 상해서 버려야 합니다. 각 친구가 받을 수 있는 사과는 몇 개일까요? 그리고 남는 사과는 몇 개일까요?`,
+      hints: ['먼저 상한 사과를 빼세요', '남은 사과를 3으로 나누세요', '나머지를 구하세요'],
+      solution: '12 - 2 = 10개의 사과가 남습니다. 10 ÷ 3 = 3 나머지 1이므로, 각 친구는 3개씩 받고 1개가 남습니다.',
+    },
+    '10min': {
+      content: `직사각형 모양의 정원이 있습니다. 가로가 세로보다 4m 더 깁니다. 정원 둘레에 울타리를 치는데 총 32m의 울타리가 필요했습니다. 이 정원의 가로와 세로의 길이를 각각 구하고, 정원의 넓이를 구하세요.`,
+      hints: ['세로를 x라 하면 가로는?', '둘레 공식: 2(가로+세로)', '방정식을 세우세요', '넓이 = 가로 × 세로'],
+      solution: '세로를 x라 하면 가로는 x+4입니다. 둘레: 2(x + x+4) = 32, 4x + 8 = 32, x = 6. 세로 6m, 가로 10m, 넓이 60m²',
+    },
+    '30min': {
+      content: `어떤 수의 제곱에서 그 수를 뺀 값이 72입니다. 이 수를 구하세요. 또한, 이 문제를 풀 수 있는 모든 방법(인수분해, 근의 공식 등)을 사용하여 풀이하고, 왜 음수 해도 답이 될 수 있는지 또는 없는지 설명하세요.`,
+      hints: ['x² - x = 72로 방정식을 세우세요', 'x² - x - 72 = 0 형태로 정리', '인수분해 또는 근의 공식 사용', '두 해 중 어떤 것이 적절한지 판단'],
+      solution: 'x² - x - 72 = 0, (x-9)(x+8) = 0, x = 9 또는 x = -8. 문제에서 "어떤 수"라고만 했으므로 -8도 가능. -8의 제곱 64에서 -8을 빼면 72.',
+    },
+  };
+
+  const fallback = problems[difficulty] || problems['5min'];
+
+  return {
+    content: fallback.content,
+    hints: fallback.hints,
+    solution: fallback.solution,
+    topic,
+    estimatedTime: config.duration,
   };
 }

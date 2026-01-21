@@ -295,3 +295,144 @@ export async function getUserDailyStats(userId: string, days = 7) {
   const snapshot = await getDocs(q);
   return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 }
+
+// ============================================================
+// Diagnostic Results (진단 결과 저장)
+// ============================================================
+
+export interface DiagnosticResult {
+  userId: string;
+  estimatedLevel: number; // 추정 학년 (1-12)
+  theta: number; // IRT 능력 파라미터
+  grade: number; // 선택한 학년
+  strengths: string[];
+  weaknesses: string[];
+  answers: { problemId: string; correct: boolean; topic: string }[];
+  completedAt: Timestamp;
+}
+
+export async function saveDiagnosticResult(
+  userId: string,
+  result: Omit<DiagnosticResult, 'userId' | 'completedAt'>
+) {
+  // 기존 진단 결과가 있으면 업데이트, 없으면 생성
+  const userRef = doc(db, 'users', userId);
+
+  await updateDoc(userRef, {
+    diagnosticCompleted: true,
+    diagnosticResult: {
+      ...result,
+      completedAt: serverTimestamp(),
+    },
+    estimatedLevel: result.estimatedLevel,
+    theta: result.theta,
+    grade: result.grade,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function getDiagnosticResult(userId: string) {
+  const userRef = doc(db, 'users', userId);
+  const userDoc = await getDoc(userRef);
+
+  if (userDoc.exists()) {
+    const data = userDoc.data();
+    if (data.diagnosticCompleted && data.diagnosticResult) {
+      return {
+        completed: true,
+        result: data.diagnosticResult,
+        estimatedLevel: data.estimatedLevel,
+        theta: data.theta,
+        grade: data.grade,
+      };
+    }
+  }
+  return { completed: false, result: null };
+}
+
+export async function resetDiagnostic(userId: string) {
+  const userRef = doc(db, 'users', userId);
+  await updateDoc(userRef, {
+    diagnosticCompleted: false,
+    diagnosticResult: null,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+// ============================================================
+// Immersion Problems (몰입 문제 저장)
+// ============================================================
+
+export interface ImmersionProblem {
+  id?: string;
+  userId: string;
+  difficulty: '5min' | '10min' | '30min' | '1hour' | '1day' | '3days' | '7days' | '1month';
+  topic: string;
+  content: string;
+  hints: string[];
+  solution: string;
+  status: 'assigned' | 'in_progress' | 'completed' | 'skipped';
+  assignedAt: Timestamp;
+  startedAt?: Timestamp;
+  completedAt?: Timestamp;
+  userAnswer?: string;
+  isCorrect?: boolean;
+  timeSpentMinutes?: number;
+}
+
+export async function assignImmersionProblem(
+  userId: string,
+  difficulty: ImmersionProblem['difficulty'],
+  problem: { topic: string; content: string; hints: string[]; solution: string }
+) {
+  const docRef = await addDoc(collection(db, 'immersionProblems'), {
+    userId,
+    difficulty,
+    ...problem,
+    status: 'assigned',
+    assignedAt: serverTimestamp(),
+  });
+  return docRef.id;
+}
+
+export async function getActiveImmersionProblem(userId: string, difficulty: string) {
+  const q = query(
+    collection(db, 'immersionProblems'),
+    where('userId', '==', userId),
+    where('difficulty', '==', difficulty),
+    where('status', 'in', ['assigned', 'in_progress']),
+    orderBy('assignedAt', 'desc'),
+    limit(1)
+  );
+  const snapshot = await getDocs(q);
+  if (!snapshot.empty) {
+    const doc = snapshot.docs[0];
+    return { id: doc.id, ...doc.data() } as ImmersionProblem;
+  }
+  return null;
+}
+
+export async function updateImmersionProblem(
+  problemId: string,
+  data: Partial<ImmersionProblem>
+) {
+  await updateDoc(doc(db, 'immersionProblems', problemId), {
+    ...data,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function completeImmersionProblem(
+  problemId: string,
+  userAnswer: string,
+  isCorrect: boolean,
+  timeSpentMinutes: number
+) {
+  await updateDoc(doc(db, 'immersionProblems', problemId), {
+    status: 'completed',
+    completedAt: serverTimestamp(),
+    userAnswer,
+    isCorrect,
+    timeSpentMinutes,
+  });
+}
