@@ -5,8 +5,6 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase/config';
 
 export default function FindEmailPage() {
   const [name, setName] = useState('');
@@ -15,16 +13,6 @@ export default function FindEmailPage() {
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState('');
 
-  const maskEmail = (email: string): string => {
-    const [localPart, domain] = email.split('@');
-    if (localPart.length <= 3) {
-      return `${localPart[0]}**@${domain}`;
-    }
-    const visiblePart = localPart.slice(0, 3);
-    const maskedPart = '*'.repeat(localPart.length - 3);
-    return `${visiblePart}${maskedPart}@${domain}`;
-  };
-
   const handleFindEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -32,18 +20,21 @@ export default function FindEmailPage() {
     setResult(null);
 
     try {
-      // Firestore에서 이름으로 사용자 검색
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('name', '==', name));
-      const querySnapshot = await getDocs(q);
+      // API 라우트를 통해 서버에서 검색
+      const response = await fetch('/api/auth/find-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: name.trim() }),
+      });
 
-      if (querySnapshot.empty) {
-        setError('입력하신 정보와 일치하는 계정을 찾을 수 없습니다.');
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || '아이디 찾기 중 오류가 발생했습니다.');
       } else {
-        // 찾은 이메일을 마스킹하여 표시
-        const foundUser = querySnapshot.docs[0].data();
-        const maskedEmail = maskEmail(foundUser.email);
-        setResult(maskedEmail);
+        setResult(data.email);
       }
     } catch (err) {
       console.error('Find email error:', err);

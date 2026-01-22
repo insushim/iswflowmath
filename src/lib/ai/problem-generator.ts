@@ -439,59 +439,99 @@ interface ImmersionProblemConfig {
   description: string;
 }
 
-const IMMERSION_CONFIG: Record<ImmersionDifficulty, ImmersionProblemConfig> = {
+interface ImmersionProblemConfigExtended extends ImmersionProblemConfig {
+  gradeBoost: number; // 상위 학년 개념 허용 범위
+  level: string;      // 난이도 레벨 설명
+}
+
+/**
+ * 황농문 교수 몰입이론 기반 난이도 설정
+ *
+ * 핵심 원리:
+ * - "실력보다 약간 높은 수준" = +10~20% 난이도
+ * - "손을 뻗으면 닿을 듯한" 도전
+ * - 60-80% 정답률을 목표로 설계
+ * - 너무 어려우면 불안, 너무 쉬우면 지루 → 몰입 불가
+ *
+ * gradeBoost 원칙:
+ * - 최대 1~2학년 상위 수준까지만
+ * - 학생이 힌트를 통해 스스로 도달할 수 있는 범위
+ * - "생각하면 풀 수 있다"는 확신이 있어야 몰입 발생
+ */
+const IMMERSION_CONFIG: Record<ImmersionDifficulty, ImmersionProblemConfigExtended> = {
   '5min': {
     duration: '5분',
-    complexity: '기본적인 개념 적용',
+    complexity: '해당 학년 기본 개념 복습',
     steps: 2,
-    description: '짧은 시간 내에 풀 수 있는 기초 문제',
+    description: '빠르게 성공 경험을 쌓는 기초 문제',
+    gradeBoost: 0,  // 해당 학년 수준
+    level: '기초',
   },
   '10min': {
     duration: '10분',
-    complexity: '여러 개념의 간단한 결합',
+    complexity: '해당 학년 응용',
     steps: 3,
-    description: '약간의 사고력이 필요한 응용 문제',
+    description: '약간의 사고력이 필요한 응용 문제 (정답률 70-80% 목표)',
+    gradeBoost: 0,  // 해당 학년 수준
+    level: '응용',
   },
   '30min': {
     duration: '30분',
-    complexity: '복합적인 문제 해결',
+    complexity: '해당 학년 심화',
     steps: 5,
-    description: '여러 단계의 추론이 필요한 심화 문제',
+    description: '여러 단계의 추론이 필요한 심화 문제 (정답률 60-70% 목표)',
+    gradeBoost: 0,  // 해당 학년 심화 수준 (다음 학년 X)
+    level: '심화',
   },
   '1hour': {
     duration: '1시간',
-    complexity: '고도의 논리적 사고 필요',
+    complexity: '해당 학년 최상위 + 다음 학년 맛보기',
     steps: 8,
-    description: '깊은 분석과 창의적 접근이 필요한 도전 문제',
+    description: '깊이 생각해야 하는 도전 문제, 다음 학년 개념 살짝 노출',
+    gradeBoost: 1,  // 1학년 상위까지 (초6 → 중1 기초)
+    level: '도전',
   },
   '1day': {
     duration: '하루',
-    complexity: '연구 수준의 탐구',
-    steps: 15,
-    description: '장시간 몰두해야 하는 탐구형 문제',
+    complexity: '다음 학년 기초~중간 수준',
+    steps: 10,
+    description: '하루 동안 고민하며 새로운 개념을 발견하는 문제',
+    gradeBoost: 1,  // 1학년 상위 (탐구하면 도달 가능한 수준)
+    level: '탐구',
   },
   '3days': {
     duration: '3일',
-    complexity: '프로젝트형 문제',
-    steps: 25,
-    description: '여러 개념을 통합하는 프로젝트 문제',
+    complexity: '다음 학년 중간~심화 수준',
+    steps: 12,
+    description: '며칠간 고민하며 개념을 확장하는 프로젝트 문제',
+    gradeBoost: 1,  // 1학년 상위 심화 (초6 → 중1 심화)
+    level: '프로젝트',
   },
   '7days': {
     duration: '일주일',
-    complexity: '심층 연구 문제',
-    steps: 40,
-    description: '수학적 증명이나 일반화가 필요한 연구 문제',
+    complexity: '1~2학년 상위 수준 융합',
+    steps: 15,
+    description: '일주일간 여러 개념을 연결하며 탐구하는 문제',
+    gradeBoost: 2,  // 2학년 상위까지 (초6 → 중2 기초)
+    level: '융합탐구',
   },
   '1month': {
     duration: '한 달',
-    complexity: '올림피아드/경시대회 수준',
-    steps: 60,
-    description: '수학 올림피아드 수준의 극도로 어려운 문제',
+    complexity: '2학년 상위 수준 도전',
+    steps: 20,
+    description: '한 달간 깊이 몰입하여 상위 개념을 스스로 발견하는 문제',
+    gradeBoost: 2,  // 2학년 상위까지 (초6 → 중2 수준) - 손 뻗으면 닿는 거리!
+    level: '심층탐구',
   },
 };
 
 /**
- * 몰입 학습용 문제 생성 (시간 기반 난이도, 성취기준 기반)
+ * 몰입 학습용 문제 생성 (시간 기반 난이도)
+ *
+ * 핵심 철학:
+ * - 진단 테스트: 해당 학년 수준만
+ * - 몰입 학습: 난이도에 따라 상위 학년 개념 도전 가능!
+ * - 소크라테스 산파법: 힌트를 통해 학생이 스스로 발견하도록 유도
  */
 export async function generateImmersionProblem(
   grade: number,
@@ -506,69 +546,131 @@ export async function generateImmersionProblem(
   estimatedTime: string;
 }> {
   const config = IMMERSION_CONFIG[difficulty];
-  const gradeLabel = getGradeLabel(grade);
+  const baseGradeLabel = getGradeLabel(grade);
 
-  // 성취기준에서 주제 선택
-  const standard = preferredTopic
-    ? selectStandardByTopic(grade, preferredTopic)
-    : selectRandomStandard(grade);
+  // 목표 학년 계산 (난이도에 따라 상위 학년 개념 사용)
+  const targetGrade = Math.min(12, grade + config.gradeBoost);
+  const targetGradeLabel = getGradeLabel(targetGrade);
 
-  const notIncluded = getNotIncluded(grade);
+  // 목표 학년의 성취기준 선택
+  const targetStandard = preferredTopic
+    ? selectStandardByTopic(targetGrade, preferredTopic)
+    : selectRandomStandard(targetGrade);
 
-  // 학년별 성취기준 기반 주제 목록
-  const curriculum = CURRICULUM_DB[grade];
+  // 목표 학년의 교육과정 정보
+  const targetCurriculum = CURRICULUM_DB[targetGrade];
   let topicsList = '';
-  if (curriculum) {
+  if (targetCurriculum) {
     const allDomains = [
-      ...Object.keys(curriculum.semester1.domains),
-      ...Object.keys(curriculum.semester2.domains),
+      ...Object.keys(targetCurriculum.semester1.domains),
+      ...Object.keys(targetCurriculum.semester2.domains),
     ];
     topicsList = allDomains.join(', ');
   }
 
-  const prompt = `당신은 한국 ${gradeLabel} 학생을 위한 **몰입 학습용** 수학 문제를 만드는 교육 전문가입니다.
+  // 소크라테스 산파법 설명
+  const socraticMethod = `
+## 🏛️ 소크라테스 산파법 (힌트 제공 방식)
+힌트는 답을 직접 알려주지 않고, 학생이 **스스로 발견**하도록 유도해야 합니다:
+1. 질문으로 방향 제시: "~를 생각해 본 적 있나요?"
+2. 관련 개념 상기: "~와 비슷한 상황을 떠올려 보세요"
+3. 작은 단계 유도: "먼저 ~부터 해보면 어떨까요?"
+4. 연결고리 제공: "~와 ~의 관계를 찾아보세요"
+5. 거의 답 근처: "~가 핵심이에요. 이것으로 무엇을 할 수 있을까요?"
+`;
 
-## 📚 한국 교육과정 성취기준 정보
+  // 난이도별 특화 지시사항
+  let difficultySpecificInstructions = '';
 
-### 이 학년에서 배우는 영역:
-${topicsList}
+  if (config.gradeBoost === 0) {
+    // 5분, 10분: 해당 학년 수준
+    difficultySpecificInstructions = `
+## 📚 난이도 지침
+- **${baseGradeLabel} 교육과정 범위 내**에서 출제
+- 기본 개념의 응용 문제
+- 실생활 연계 권장`;
+  } else if (config.gradeBoost <= 2) {
+    // 30분, 1시간: 약간 상위 개념
+    difficultySpecificInstructions = `
+## 📚 난이도 지침
+- 기본: ${baseGradeLabel} 개념
+- 도전: **${targetGradeLabel} 개념까지 사용 가능**
+- 학생이 새로운 개념을 **스스로 발견**하도록 문제 설계
+- 힌트를 통해 상위 개념을 자연스럽게 유도`;
+  } else if (config.gradeBoost <= 4) {
+    // 하루, 3일: 상위 학교급 개념
+    difficultySpecificInstructions = `
+## 📚 난이도 지침
+- 기본 출발: ${baseGradeLabel} 개념
+- 목표 도달: **${targetGradeLabel} 수준의 심화 문제**
+- ${grade <= 6 ? '중학교' : '고등학교'} 개념을 탐구하는 문제
+- **경시대회/영재원 입문 수준**
+- 수학적 사고력과 창의성 필요`;
+  } else {
+    // 7일, 한달: 올림피아드 수준
+    difficultySpecificInstructions = `
+## 📚 난이도 지침 (올림피아드 수준)
+- **KMO(한국수학올림피아드), IMO 예선 수준**
+- 기본 출발점: ${baseGradeLabel}의 개념
+- 목표: 고등학교 이상의 수학적 사고
+- **증명, 일반화, 극한적 사고** 필요
+- 여러 분야의 수학을 융합하는 문제
+- 창의적이고 우아한 풀이 존재`;
+  }
 
-${standard ? `
-### 적용할 성취기준 (참고):
-- 코드: ${standard.code}
-- 내용: ${standard.description}
-- 핵심 키워드: ${standard.keywords.join(', ')}
-` : ''}
+  const prompt = `당신은 ${baseGradeLabel} 학생을 위한 **몰입 학습용** 수학 문제를 만드는 교육 전문가입니다.
 
-### ❌ 이 학년에서 다루지 않는 내용 (절대 포함 금지):
-${notIncluded.map(item => `- ${item}`).join('\n')}
+${difficultySpecificInstructions}
 
-## 🎯 몰입 학습이란?
-- 학생이 한 문제에 ${config.duration} 정도 깊이 몰두할 수 있는 문제
-- 단순 계산이 아닌, **사고력과 창의력**을 요구하는 문제
-- 여러 단계의 추론과 문제 해결 전략이 필요한 문제
-
-## 📋 요구사항:
-- 학년: ${gradeLabel}
-- 예상 풀이 시간: ${config.duration}
+## 🎯 문제 요구사항
+- 학생 학년: ${baseGradeLabel}
+- 목표 난이도: **${config.level}** (${targetGradeLabel} 수준)
+- 예상 풀이 시간: **${config.duration}**
 - 복잡도: ${config.complexity}
 - 풀이 단계: 약 ${config.steps}단계
-- 특징: ${config.description}
+
+${targetStandard ? `
+## 📖 참고할 성취기준 (${targetGradeLabel}):
+- 코드: ${targetStandard.code}
+- 내용: ${targetStandard.description}
+- 키워드: ${targetStandard.keywords.join(', ')}
+` : ''}
+
+## 🎓 ${targetGradeLabel}에서 다루는 영역:
+${topicsList}
+
+${socraticMethod}
 
 ## ⚠️ 중요 규칙:
-1. **반드시 ${gradeLabel} 교육과정 범위 내에서만 출제**하세요
-2. **배우지 않은 개념(함수 f(x), 방정식 등)은 절대 사용 금지**
-3. 학생이 ${config.duration} 동안 고민하고 탐구할 수 있어야 합니다
-4. 실생활 연계나 창의적 상황 설정을 권장합니다
-5. ${gradeLabel} 수준에서 도전적이되 불가능하지 않은 문제
+1. ${config.duration} 동안 **깊이 몰두**할 수 있는 문제여야 합니다
+2. 단순 계산 문제 금지! **사고력, 창의력, 문제해결력** 필요
+3. 힌트는 **소크라테스 산파법**으로: 질문을 통해 스스로 발견하게 유도
+4. ${config.gradeBoost > 0 ? `상위 개념(${targetGradeLabel})을 **탐구하는 기회**로 설계` : '해당 학년 범위 내에서 도전적으로'}
+5. 아름답고 우아한 풀이가 존재하는 문제 선호
+
+## 📝 용어 설명 필수! (매우 중요)
+- 학생은 ${baseGradeLabel}이므로 **${targetGradeLabel} 용어를 모를 수 있습니다**
+- 문제에 사용되는 **모든 새로운 수학 용어**는 문제 속에서 쉽게 설명해주세요
+- 예시:
+  - "약수의 합(어떤 수를 나누어 떨어지게 하는 모든 수를 더한 것)"
+  - "판별식(이차방정식에서 근의 개수를 알려주는 값으로, b²-4ac)"
+  - "벡터(크기와 방향을 함께 나타내는 화살표)"
+- 용어 설명은 **괄호 안에 짧고 명확하게** 넣어주세요
+- 학생이 용어를 몰라서 문제를 포기하지 않도록!
 
 다음 JSON 형식으로 문제를 생성해주세요:
 
 {
-  "content": "문제 내용 (상세하게, LaTeX 수식 사용 가능. 상황 설정과 조건을 명확히)",
-  "hints": ["힌트1 (방향 제시)", "힌트2 (핵심 개념)", "힌트3 (풀이 접근법)", "힌트4 (중간 단계)", "힌트5 (거의 답에 가까운 힌트)"],
-  "solution": "상세한 단계별 풀이 (${config.steps}단계 이상으로 자세히)",
-  "topic": "주제명 (성취기준 기반)"
+  "content": "문제 내용 (상세하고 도전적으로, LaTeX 수식 사용)",
+  "hints": [
+    "힌트1: (소크라테스식 질문으로 방향 제시)",
+    "힌트2: (관련 개념 상기시키는 질문)",
+    "힌트3: (풀이의 첫 단계를 유도하는 질문)",
+    "힌트4: (핵심 아이디어에 다가가는 질문)",
+    "힌트5: (거의 답에 가까운 유도 질문)"
+  ],
+  "solution": "상세한 단계별 풀이 (${config.steps}단계 이상, 각 단계의 사고 과정 설명)",
+  "topic": "주제명"
 }
 
 JSON만 반환해주세요.`;
@@ -590,17 +692,26 @@ JSON만 반환해주세요.`;
       content: parsed.content,
       hints: parsed.hints || [],
       solution: parsed.solution,
-      topic: parsed.topic || standard?.description || '수학',
+      topic: parsed.topic || targetStandard?.description || `${config.level} 수학`,
       estimatedTime: config.duration,
     };
   } catch (error) {
     console.error('Error generating immersion problem:', error);
 
-    // 폴백 문제
-    return generateFallbackImmersionProblem(grade, difficulty, standard?.description || '수학');
+    // 폴백 문제 (난이도별 적절한 수준)
+    return generateFallbackImmersionProblem(grade, difficulty, targetStandard?.description || '수학');
   }
 }
 
+/**
+ * 황농문 교수 몰입이론 기반 폴백 문제 생성
+ *
+ * 핵심 원칙:
+ * - "손을 뻗으면 닿을 듯한" 난이도 (현재 실력 +10~20%)
+ * - 60-80% 정답률 목표
+ * - 힌트를 통해 스스로 발견하는 기쁨
+ * - 너무 어려우면 불안, 너무 쉬우면 지루 → 몰입 불가
+ */
 function generateFallbackImmersionProblem(
   grade: number,
   difficulty: ImmersionDifficulty,
@@ -614,64 +725,556 @@ function generateFallbackImmersionProblem(
 } {
   const config = IMMERSION_CONFIG[difficulty];
 
-  // 학년별 폴백 문제 (성취기준 기반)
-  const gradeProblems: Record<number, Record<string, { content: string; hints: string[]; solution: string }>> = {
-    1: {
-      '5min': {
-        content: '바구니에 사과가 8개 있습니다. 동생이 3개를 먹고, 엄마가 2개를 더 넣어주셨습니다. 바구니에 남은 사과는 몇 개인가요?',
-        hints: ['먼저 동생이 먹은 것을 빼세요', '8 - 3 = 5입니다', '그 다음 엄마가 넣어준 것을 더하세요'],
-        solution: '8 - 3 = 5 (동생이 먹은 후)\n5 + 2 = 7 (엄마가 넣어준 후)\n답: 7개',
+  // gradeBoost 적용 (황농문 이론: 최대 +2학년까지만)
+  const targetGrade = Math.min(12, grade + config.gradeBoost);
+
+  // ============================================================
+  // 6학년 기준 몰입 문제 (학년별로 확장 가능)
+  // 황농문 이론: "생각하면 풀 수 있다"는 확신이 있어야 몰입
+  // ============================================================
+
+  // 기초 문제 (5min, 10min) - 해당 학년 수준
+  const basicProblems: Record<number, { content: string; hints: string[]; solution: string }[]> = {
+    6: [
+      {
+        content: `어떤 물건의 정가가 10,000원입니다. 이 물건을 20% 할인해서 팔았습니다.
+
+**질문**: 할인된 가격은 얼마인가요?`,
+        hints: [
+          '20%는 전체의 얼마일까요? 100% 중 20%를 생각해보세요.',
+          '20% = 20/100 = 0.2 또는 1/5 이에요.',
+          '할인 금액 = 정가 × 할인율',
+          '할인된 가격 = 정가 - 할인 금액'
+        ],
+        solution: `할인 금액 = 10,000 × 0.2 = 2,000원
+할인된 가격 = 10,000 - 2,000 = 8,000원
+
+또는 한 번에:
+할인된 가격 = 10,000 × (1 - 0.2) = 10,000 × 0.8 = 8,000원`,
       },
-    },
-    6: {
-      '5min': {
-        content: '어떤 물건의 원래 가격이 8,000원입니다. 20% 할인된 가격은 얼마인가요?',
-        hints: ['20%를 분수나 소수로 바꿔보세요', '할인 금액 = 원래 가격 × 할인율', '원래 가격에서 할인 금액을 빼세요'],
-        solution: '할인 금액 = 8,000 × 0.2 = 1,600원\n할인된 가격 = 8,000 - 1,600 = 6,400원',
-      },
-      '10min': {
-        content: '직사각형 모양의 정원이 있습니다. 가로가 세로보다 4m 더 깁니다. 정원 둘레에 울타리를 치는데 총 32m의 울타리가 필요했습니다. 이 정원의 넓이를 구하세요.',
-        hints: ['세로를 □라 하면 가로는 □+4입니다', '둘레 = 2 × (가로 + 세로)', '□ + □ + 4 = 16입니다', '넓이 = 가로 × 세로'],
-        solution: '둘레 = 2(가로 + 세로) = 32\n가로 + 세로 = 16\n세로를 □라 하면: □ + (□+4) = 16\n2□ = 12, □ = 6\n세로 = 6m, 가로 = 10m\n넓이 = 6 × 10 = 60m²',
-      },
-      '30min': {
-        content: '철수네 반 학생 30명이 수학, 영어 시험을 봤습니다. 수학을 80점 이상 받은 학생은 18명, 영어를 80점 이상 받은 학생은 15명, 두 과목 모두 80점 이상인 학생은 10명입니다. 두 과목 모두 80점 미만인 학생은 몇 명인가요? 벤 다이어그램을 그려서 설명하세요.',
-        hints: ['벤 다이어그램을 그려보세요', '수학만 80점 이상 = 18 - 10', '영어만 80점 이상 = 15 - 10', '전체에서 빼세요'],
-        solution: '수학만 80점 이상: 18 - 10 = 8명\n영어만 80점 이상: 15 - 10 = 5명\n둘 다 80점 이상: 10명\n80점 이상인 학생 수: 8 + 5 + 10 = 23명\n둘 다 80점 미만: 30 - 23 = 7명',
-      },
-    },
-    7: {
-      '5min': {
-        content: '일차방정식 $3x + 5 = 2x - 7$을 풀어 $x$의 값을 구하세요.',
-        hints: ['x가 있는 항을 한쪽으로 모으세요', '상수항을 다른 쪽으로 모으세요', 'x의 계수로 나누세요'],
-        solution: '3x + 5 = 2x - 7\n3x - 2x = -7 - 5\nx = -12',
-      },
-      '10min': {
-        content: '좌표평면에서 두 점 A(2, 3)과 B(5, 7) 사이의 거리를 구하세요.',
-        hints: ['두 점 사이의 거리 공식을 사용하세요', 'x좌표의 차와 y좌표의 차를 각각 구하세요', '피타고라스 정리를 적용하세요'],
-        solution: 'x좌표의 차: 5 - 2 = 3\ny좌표의 차: 7 - 3 = 4\n거리 = √(3² + 4²) = √(9 + 16) = √25 = 5',
-      },
-    },
-    9: {
-      '30min': {
-        content: '이차방정식 $x^2 - 6x + k = 0$이 중근을 가질 때, 상수 $k$의 값과 그 중근을 구하세요. 또한 이차방정식이 중근을 가지는 조건을 설명하세요.',
-        hints: ['중근 조건: 판별식 D = 0', 'D = b² - 4ac', 'a = 1, b = -6, c = k를 대입하세요', '중근은 x = -b/2a'],
-        solution: '판별식 D = b² - 4ac = (-6)² - 4(1)(k) = 36 - 4k\n중근 조건: D = 0\n36 - 4k = 0, k = 9\n중근: x = -b/2a = 6/2 = 3\n\n이차방정식이 중근을 가지는 조건은 판별식 D = b² - 4ac = 0일 때입니다.',
-      },
-    },
+      {
+        content: `철수네 반 학생 30명 중에서 안경을 쓴 학생은 12명입니다.
+
+**질문**: 안경을 쓴 학생은 전체의 몇 %인가요?`,
+        hints: [
+          '비율 = 부분/전체',
+          '12/30을 계산해보세요',
+          '분수를 소수로 바꾸면?',
+          '소수에 100을 곱하면 퍼센트!'
+        ],
+        solution: `비율 = 12/30 = 2/5 = 0.4
+퍼센트 = 0.4 × 100 = 40%
+
+답: 40%`,
+      }
+    ],
+    7: [
+      {
+        content: `**[새로운 개념 소개]**
+중학교에서는 '음수'를 배워요. 0보다 작은 수를 음수라고 해요. 예: -3, -5
+
+**문제**:
+어떤 수에 5를 더했더니 -3이 되었습니다. 어떤 수는 무엇인가요?
+
+이것을 '방정식'으로 쓰면: x + 5 = -3`,
+        hints: [
+          '어떤 수를 x라고 하면, x + 5 = -3',
+          '양쪽에서 5를 빼면 x만 남아요',
+          'x = -3 - 5',
+          '음수끼리 빼면? -3 - 5 = -8'
+        ],
+        solution: `x + 5 = -3
+x = -3 - 5
+x = -8
+
+검산: -8 + 5 = -3 ✓`,
+      }
+    ],
+    8: [
+      {
+        content: `**[새로운 개념 소개]**
+두 개의 방정식을 동시에 만족하는 x, y를 찾는 것을 '연립방정식'이라고 해요.
+
+**문제**:
+사과 2개와 배 1개의 가격이 1,100원이고,
+사과 1개와 배 2개의 가격이 1,300원입니다.
+사과 1개와 배 1개의 가격은 각각 얼마인가요?
+
+(힌트: 사과 가격을 x원, 배 가격을 y원이라 하면...)`,
+        hints: [
+          '2x + y = 1100 (사과 2개 + 배 1개)',
+          'x + 2y = 1300 (사과 1개 + 배 2개)',
+          '첫 번째 식에서 y = 1100 - 2x',
+          '이것을 두 번째 식에 대입해보세요'
+        ],
+        solution: `2x + y = 1100 ... ①
+x + 2y = 1300 ... ②
+
+①에서 y = 1100 - 2x
+②에 대입: x + 2(1100 - 2x) = 1300
+x + 2200 - 4x = 1300
+-3x = -900
+x = 300
+
+y = 1100 - 2(300) = 500
+
+답: 사과 300원, 배 500원
+
+검산: 2(300) + 500 = 1100 ✓
+     300 + 2(500) = 1300 ✓`,
+      }
+    ]
   };
 
-  const gradeFallbacks = gradeProblems[grade] || gradeProblems[6];
-  const fallback = gradeFallbacks[difficulty] || gradeFallbacks['5min'] || {
-    content: '문제를 불러오는 중입니다.',
-    hints: ['힌트를 불러오는 중입니다'],
-    solution: '풀이를 불러오는 중입니다.',
+  // 심화 문제 (30min) - 해당 학년 도전
+  const deeperProblems: Record<number, { content: string; hints: string[]; solution: string }[]> = {
+    6: [
+      {
+        content: `**[도전 문제]**
+어떤 물건을 정가의 20% 할인해서 팔았더니 판매 가격이 4,800원이었습니다.
+
+**질문**: 이 물건의 정가는 얼마였나요?
+
+(힌트: 거꾸로 생각해보세요!)`,
+        hints: [
+          '20% 할인했다는 것은 정가의 80%를 받았다는 뜻이에요',
+          '정가 × 0.8 = 4,800',
+          '정가를 구하려면 4,800을 0.8로 나누면 돼요',
+          '4,800 ÷ 0.8 = ?'
+        ],
+        solution: `20% 할인 → 정가의 80% = 판매가
+
+정가 × 0.8 = 4,800
+정가 = 4,800 ÷ 0.8
+정가 = 6,000원
+
+검산: 6,000 × 0.8 = 4,800 ✓`,
+      },
+      {
+        content: `**[도전 문제]**
+정가의 20%를 할인한 가격에서 다시 10%를 추가 할인했습니다.
+
+**질문**:
+1. 최종 가격은 정가의 몇 %인가요?
+2. 왜 30% 할인이 아닐까요? 설명해보세요.`,
+        hints: [
+          '첫 번째 할인 후: 정가 × 0.8',
+          '두 번째 할인은 "할인된 가격"의 10%를 빼는 거예요',
+          '(정가 × 0.8) × 0.9 = ?',
+          '0.8 × 0.9를 계산해보세요'
+        ],
+        solution: `1단계: 20% 할인 → 정가의 80% = 정가 × 0.8
+2단계: 추가 10% 할인 → (정가 × 0.8) × 0.9
+
+최종 가격 = 정가 × 0.8 × 0.9 = 정가 × 0.72
+
+답: 정가의 72% (= 28% 할인)
+
+왜 30%가 아닐까?
+- 두 번째 할인은 "정가"가 아니라 "이미 할인된 가격"에서 10%를 빼기 때문!
+- 8,000원의 10%와 10,000원의 10%는 다르죠!`,
+      }
+    ],
+    7: [
+      {
+        content: `**[도전 문제]**
+**[용어 설명]**
+- **일차방정식**: x가 1번만 나오는 방정식 (예: 3x + 5 = 11)
+
+형이 동생보다 5살 많습니다.
+3년 후에는 형의 나이가 동생 나이의 2배보다 1살 적습니다.
+현재 형과 동생의 나이는?`,
+        hints: [
+          '동생의 현재 나이를 x살이라 하면, 형은 (x+5)살',
+          '3년 후: 동생 (x+3)살, 형 (x+8)살',
+          '3년 후 조건: x + 8 = 2(x + 3) - 1',
+          '방정식을 풀어보세요!'
+        ],
+        solution: `동생 현재 나이: x살
+형 현재 나이: (x + 5)살
+
+3년 후:
+- 동생: (x + 3)살
+- 형: (x + 8)살
+
+조건: 형 나이 = 동생 나이의 2배 - 1
+x + 8 = 2(x + 3) - 1
+x + 8 = 2x + 6 - 1
+x + 8 = 2x + 5
+8 - 5 = 2x - x
+x = 3
+
+답: 동생 3살, 형 8살
+
+검산: 3년 후 → 동생 6살, 형 11살
+11 = 2 × 6 - 1 = 11 ✓`,
+      }
+    ]
   };
+
+  // 도전 문제 (1hour) - 다음 학년 맛보기
+  const challengeProblems: Record<number, { content: string; hints: string[]; solution: string }[]> = {
+    6: [
+      {
+        content: `**[다음 학년 미리보기 - 음수와 방정식]**
+
+**[용어 설명]**
+- **음수**: 0보다 작은 수 (예: -1, -5, -10)
+- **양수**: 0보다 큰 수 (예: 1, 5, 10)
+- 온도계를 생각해보세요: 영하 5도 = -5°C
+
+**문제**:
+아침 기온이 -3°C였습니다. 낮에는 기온이 올라서 아침보다 8°C 더 높아졌습니다.
+낮 기온은 몇 °C인가요?
+
+더 생각해보기: 저녁에 낮보다 10°C 내려갔다면, 저녁 기온은?`,
+        hints: [
+          '-3에서 8만큼 올라간다는 것은 -3 + 8',
+          '음수 + 양수: 수직선에서 생각해보세요',
+          '-3에서 오른쪽으로 8칸 이동',
+          '저녁 기온: 낮 기온 - 10'
+        ],
+        solution: `낮 기온 = -3 + 8 = 5°C
+
+수직선으로 이해:
+... -5 -4 -3 -2 -1 0 1 2 3 4 5 ...
+    ↑ 시작      →→→→→→→→ ↑ 도착
+
+저녁 기온 = 5 - 10 = -5°C
+
+답: 낮 5°C, 저녁 -5°C`,
+      },
+      {
+        content: `**[다음 학년 미리보기 - 방정식의 아이디어]**
+
+**[용어 설명]**
+- **방정식**: 모르는 수(□나 x)가 들어간 등식
+- **방정식을 푼다**: □에 어떤 수가 들어가야 등식이 성립하는지 찾는 것
+
+**문제**:
+어떤 수의 3배에서 7을 빼면 20이 됩니다.
+어떤 수를 구하세요.
+
+(힌트: 어떤 수를 □라 하면, □ × 3 - 7 = 20)`,
+        hints: [
+          '□ × 3 - 7 = 20',
+          '양쪽에 7을 더하면: □ × 3 = 27',
+          '양쪽을 3으로 나누면: □ = 9',
+          '검산: 9 × 3 - 7 = 27 - 7 = 20 ✓'
+        ],
+        solution: `어떤 수를 □라 하면:
+□ × 3 - 7 = 20
+□ × 3 = 20 + 7
+□ × 3 = 27
+□ = 27 ÷ 3
+□ = 9
+
+검산: 9 × 3 - 7 = 27 - 7 = 20 ✓
+
+답: 9`,
+      }
+    ],
+    7: [
+      {
+        content: `**[다음 학년 미리보기 - 연립방정식 맛보기]**
+
+**[용어 설명]**
+- **연립방정식**: 두 개의 조건을 동시에 만족하는 값 찾기
+
+**문제**:
+연필 3자루와 지우개 2개를 사면 1,100원
+연필 2자루와 지우개 3개를 사면 1,150원
+
+연필 1자루와 지우개 1개의 가격은 각각 얼마인가요?`,
+        hints: [
+          '연필 가격을 x원, 지우개 가격을 y원이라 하면',
+          '3x + 2y = 1100',
+          '2x + 3y = 1150',
+          '두 식을 빼거나 더해서 문자 하나를 없애보세요'
+        ],
+        solution: `3x + 2y = 1100 ... ①
+2x + 3y = 1150 ... ②
+
+①×3: 9x + 6y = 3300
+②×2: 4x + 6y = 2300
+빼면: 5x = 1000
+    x = 200
+
+①에 대입: 3(200) + 2y = 1100
+600 + 2y = 1100
+2y = 500
+y = 250
+
+답: 연필 200원, 지우개 250원`,
+      }
+    ]
+  };
+
+  // 탐구 문제 (1day, 3days) - 다음 학년 개념 탐구
+  const explorationProblems: Record<number, { content: string; hints: string[]; solution: string }[]> = {
+    6: [
+      {
+        content: `**[탐구 과제 - 규칙 발견하기]**
+
+다음 계산 결과를 관찰하고 규칙을 발견해보세요:
+
+1 = 1
+1 + 3 = 4
+1 + 3 + 5 = 9
+1 + 3 + 5 + 7 = 16
+1 + 3 + 5 + 7 + 9 = ?
+
+**탐구 질문**:
+1. 다음 결과는 무엇인가요?
+2. 어떤 규칙이 있나요?
+3. 1부터 시작하는 연속 홀수 10개의 합은 얼마일까요?
+4. 왜 이런 규칙이 성립할까요? (그림으로 설명해보세요!)`,
+        hints: [
+          '결과가 1, 4, 9, 16, ... 이네요. 뭔가 보이나요?',
+          '1 = 1², 4 = 2², 9 = 3², 16 = 4²',
+          '연속 홀수 n개의 합 = n²',
+          '정사각형 모양으로 점을 찍어보세요!'
+        ],
+        solution: `1 + 3 + 5 + 7 + 9 = 25 = 5²
+
+규칙: 1부터 시작하는 연속 홀수 n개의 합 = n²
+
+연속 홀수 10개의 합 = 10² = 100
+
+왜 그럴까요? (그림으로 이해)
+●        1개 (1)
+●●●      +3개 (L자 모양)
+●●●●●    +5개 (L자 모양)
+...
+
+이렇게 정사각형을 만들어가기 때문!
+
+1 = 1×1 정사각형
+1+3 = 2×2 정사각형
+1+3+5 = 3×3 정사각형
+...`,
+      },
+      {
+        content: `**[탐구 과제 - 비율과 도형]**
+
+직사각형의 가로와 세로의 비가 3:2입니다.
+이 직사각형의 둘레가 50cm일 때, 넓이를 구하세요.
+
+**더 탐구해보기**:
+둘레가 같은 직사각형 중에서 어떤 비율일 때 넓이가 가장 클까요?`,
+        hints: [
+          '가로:세로 = 3:2 → 가로 = 3k, 세로 = 2k (k는 비례상수)',
+          '둘레 = 2(가로 + 세로) = 2(3k + 2k) = 10k',
+          '10k = 50 → k = 5',
+          '가로 = 15cm, 세로 = 10cm'
+        ],
+        solution: `가로 = 3k, 세로 = 2k라 하면
+
+둘레 = 2(3k + 2k) = 10k = 50
+k = 5
+
+가로 = 15cm, 세로 = 10cm
+넓이 = 15 × 10 = 150cm²
+
+[더 탐구]
+둘레가 50cm로 같을 때:
+- 3:2 비율 → 넓이 150cm²
+- 4:1 비율 → 20×5 = 100cm²
+- 1:1 비율(정사각형) → 12.5×12.5 = 156.25cm²
+
+정사각형일 때 넓이가 가장 크다!`,
+      }
+    ],
+    7: [
+      {
+        content: `**[탐구 과제 - 좌표의 발견]**
+
+**[용어 설명]**
+- **좌표**: 위치를 숫자 쌍으로 나타내는 방법 (가로 위치, 세로 위치)
+- **좌표평면**: x축(가로)과 y축(세로)이 만나는 평면
+
+**문제**:
+좌표평면에서 세 점 A(0, 0), B(4, 0), C(2, 3)을 꼭짓점으로 하는 삼각형의 넓이를 구하세요.
+
+**탐구**: 점 C를 움직여서 넓이가 12가 되게 하려면 C의 y좌표는 얼마여야 할까요?`,
+        hints: [
+          'A, B는 x축 위에 있어서 밑변 AB = 4',
+          '높이는 C에서 x축까지의 거리 = C의 y좌표 = 3',
+          '삼각형 넓이 = 밑변 × 높이 ÷ 2',
+          '넓이가 12가 되려면: 4 × h ÷ 2 = 12'
+        ],
+        solution: `밑변 AB = 4 (A에서 B까지 거리)
+높이 = 3 (C의 y좌표)
+
+넓이 = 4 × 3 ÷ 2 = 6
+
+[탐구]
+넓이 = 4 × h ÷ 2 = 12
+2h = 12
+h = 6
+
+C의 y좌표가 6이면 넓이가 12가 됩니다.
+예: C(2, 6)`,
+      }
+    ]
+  };
+
+  // 융합탐구 문제 (7days, 1month) - 1~2학년 상위 개념 연결
+  const advancedExplorationProblems: Record<number, { content: string; hints: string[]; solution: string }[]> = {
+    6: [
+      {
+        content: `**[융합 탐구 - 규칙과 식]**
+
+**[새로운 개념]**
+숫자 대신 문자를 사용하면 규칙을 간단하게 표현할 수 있어요!
+
+**문제**:
+성냥개비로 정사각형을 만들고 있습니다.
+
+□ (4개)
+□□ (7개)
+□□□ (10개)
+
+1. 정사각형 5개를 만들려면 성냥개비가 몇 개 필요할까요?
+2. 정사각형 n개를 만들 때 필요한 성냥개비 수를 n으로 나타내보세요.
+3. 성냥개비 100개로 정사각형을 몇 개 만들 수 있을까요?`,
+        hints: [
+          '1개: 4, 2개: 7, 3개: 10 → 3씩 증가',
+          '처음 4개 + 추가할 때마다 3개',
+          '정사각형 n개 → 4 + 3(n-1) = 3n + 1',
+          '3n + 1 = 100 → n = ?'
+        ],
+        solution: `규칙 발견:
+1개: 4 = 4
+2개: 4 + 3 = 7
+3개: 4 + 3 + 3 = 10
+n개: 4 + 3(n-1) = 3n + 1
+
+1) 5개: 3×5 + 1 = 16개
+
+2) n개일 때: 3n + 1개
+
+3) 3n + 1 = 100
+   3n = 99
+   n = 33
+
+   검산: 3×33 + 1 = 100 ✓
+
+   답: 33개`,
+      },
+      {
+        content: `**[융합 탐구 - 비율의 깊은 이해]**
+
+**문제**:
+소금물 A는 소금 30g이 물 270g에 녹아 있고,
+소금물 B는 소금 40g이 물 160g에 녹아 있습니다.
+
+1. A와 B의 소금물 농도(%)는 각각 얼마인가요?
+2. A와 B를 섞으면 농도는 얼마가 될까요?
+3. (심화) 농도 15%의 소금물을 만들려면 A와 B를 어떤 비율로 섞어야 할까요?`,
+        hints: [
+          '농도(%) = 소금 ÷ (소금 + 물) × 100',
+          'A: 30/(30+270) × 100, B: 40/(40+160) × 100',
+          '섞으면: (30+40)/(300+200) × 100',
+          '심화: A를 x g, B를 y g 섞는다 하면...'
+        ],
+        solution: `1) 농도 계산
+A: 30/300 × 100 = 10%
+B: 40/200 × 100 = 20%
+
+2) A+B 섞으면
+전체 소금 = 30 + 40 = 70g
+전체 소금물 = 300 + 200 = 500g
+농도 = 70/500 × 100 = 14%
+
+3) 15% 만들기
+A(10%)를 x g, B(20%)를 y g 섞으면
+(0.1x + 0.2y)/(x+y) = 0.15
+0.1x + 0.2y = 0.15x + 0.15y
+0.05y = 0.05x
+x = y
+
+→ A와 B를 1:1 비율로 섞으면 15%!
+
+검산: (0.1×100 + 0.2×100)/200 = 30/200 = 0.15 ✓`,
+      }
+    ],
+    7: [
+      {
+        content: `**[융합 탐구 - 방정식과 그래프]**
+
+**[용어 설명]**
+- **일차함수**: y = ax + b 형태의 식 (그래프가 직선)
+- **기울기**: 직선이 얼마나 가파른지 (a값)
+- **y절편**: 직선이 y축과 만나는 점 (b값)
+
+**문제**:
+휴대폰 요금제를 비교합니다.
+- A요금제: 기본료 10,000원 + 1분당 50원
+- B요금제: 기본료 15,000원 + 1분당 30원
+
+1. x분 통화할 때 각 요금을 x로 나타내세요.
+2. 몇 분 이상 통화하면 B요금제가 유리할까요?
+3. 두 요금이 같아지는 통화 시간은?`,
+        hints: [
+          'A요금: 10000 + 50x, B요금: 15000 + 30x',
+          'B가 유리 → B요금 < A요금',
+          '15000 + 30x < 10000 + 50x',
+          '두 요금이 같을 때: 10000 + 50x = 15000 + 30x'
+        ],
+        solution: `1) A요금 = 10000 + 50x (원)
+   B요금 = 15000 + 30x (원)
+
+2) B가 유리한 조건
+   15000 + 30x < 10000 + 50x
+   5000 < 20x
+   250 < x
+   → 251분 이상 통화하면 B가 유리
+
+3) 같아지는 시점
+   10000 + 50x = 15000 + 30x
+   20x = 5000
+   x = 250
+
+   → 250분일 때 같음 (둘 다 22,500원)
+
+검산: A: 10000 + 50×250 = 22500
+     B: 15000 + 30×250 = 22500 ✓`,
+      }
+    ]
+  };
+
+  // 난이도에 따른 문제 선택 (황농문 이론 기반)
+  let selectedProblem: { content: string; hints: string[]; solution: string };
+
+  // 학년에 맞는 문제 풀 선택
+  const gradeBasic = basicProblems[grade] || basicProblems[6];
+  const gradeDeeper = deeperProblems[grade] || deeperProblems[6];
+  const gradeChallenge = challengeProblems[grade] || challengeProblems[6];
+  const gradeExploration = explorationProblems[grade] || explorationProblems[6];
+  const gradeAdvanced = advancedExplorationProblems[grade] || advancedExplorationProblems[6];
+
+  if (difficulty === '5min' || difficulty === '10min') {
+    // 기초: 해당 학년 수준 (성공 경험 축적)
+    selectedProblem = gradeBasic[Math.floor(Math.random() * gradeBasic.length)];
+  } else if (difficulty === '30min') {
+    // 심화: 해당 학년 도전
+    selectedProblem = gradeDeeper[Math.floor(Math.random() * gradeDeeper.length)];
+  } else if (difficulty === '1hour') {
+    // 도전: 다음 학년 맛보기
+    selectedProblem = gradeChallenge[Math.floor(Math.random() * gradeChallenge.length)];
+  } else if (difficulty === '1day' || difficulty === '3days') {
+    // 탐구: 다음 학년 개념 탐구
+    selectedProblem = gradeExploration[Math.floor(Math.random() * gradeExploration.length)];
+  } else {
+    // 7days, 1month: 융합 탐구 (1~2학년 상위)
+    selectedProblem = gradeAdvanced[Math.floor(Math.random() * gradeAdvanced.length)];
+  }
 
   return {
-    content: fallback.content,
-    hints: fallback.hints,
-    solution: fallback.solution,
+    content: selectedProblem.content,
+    hints: selectedProblem.hints,
+    solution: selectedProblem.solution,
     topic,
     estimatedTime: config.duration,
   };
