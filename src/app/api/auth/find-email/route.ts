@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebase/admin';
+import { getAdminDb } from '@/lib/firebase/admin';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Firestore에서 이름으로 사용자 검색
+    const adminDb = getAdminDb();
     const usersRef = adminDb.collection('users');
     const querySnapshot = await usersRef.where('name', '==', name.trim()).get();
 
