@@ -130,7 +130,17 @@ export default function LoginPage() {
             Google로 로그인
           </Button>
 
-          <div className="mt-6 text-center text-sm text-gray-600">
+          <div className="mt-4 flex justify-center gap-4 text-sm text-gray-600">
+            <Link href="/find-email" className="text-blue-600 hover:underline font-medium">
+              아이디 찾기
+            </Link>
+            <span className="text-gray-300">|</span>
+            <Link href="/find-password" className="text-blue-600 hover:underline font-medium">
+              비밀번호 찾기
+            </Link>
+          </div>
+
+          <div className="mt-4 text-center text-sm text-gray-600">
             계정이 없으신가요?{' '}
             <Link href="/signup" className="text-blue-600 hover:underline font-medium">
               회원가입

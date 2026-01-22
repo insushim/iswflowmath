@@ -11,6 +11,7 @@ import {
   updateProfile,
   GoogleAuthProvider,
   signInWithPopup,
+  sendPasswordResetEmail,
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './config';
@@ -84,6 +85,11 @@ export async function signInWithGoogle(): Promise<User> {
 // Sign out
 export async function signOut(): Promise<void> {
   await firebaseSignOut(auth);
+}
+
+// Reset password
+export async function resetPassword(email: string): Promise<void> {
+  await sendPasswordResetEmail(auth, email);
 }
 
 // Get current user
