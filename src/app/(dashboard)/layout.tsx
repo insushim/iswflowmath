@@ -1,14 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth } from '@/lib/firebase/config';
+import { auth, db } from '@/lib/firebase/config';
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase/config';
 import { signOut } from '@/lib/firebase/auth';
 
 const navigation = [
@@ -39,24 +38,53 @@ export default function DashboardLayout({
   const [user, setUser] = useState<User | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchUserData = useCallback(async (firebaseUser: User) => {
+    try {
+      const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+      if (userDoc.exists()) {
+        setUserData(userDoc.data() as UserData);
+      }
+    } catch (err) {
+      console.error('[Dashboard] Failed to fetch user data:', err);
+      // Firestore 오류가 있어도 기본 사용자 정보는 표시
+    }
+  }, []);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        setUser(firebaseUser);
-        // Firestore에서 사용자 데이터 가져오기
-        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-        if (userDoc.exists()) {
-          setUserData(userDoc.data() as UserData);
-        }
-      } else {
-        router.push('/login');
-      }
-      setLoading(false);
-    });
+    let unsubscribe: (() => void) | undefined;
 
-    return () => unsubscribe();
-  }, [router]);
+    try {
+      unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+        try {
+          if (firebaseUser) {
+            setUser(firebaseUser);
+            await fetchUserData(firebaseUser);
+          } else {
+            router.push('/login');
+          }
+        } catch (err) {
+          console.error('[Dashboard] Auth state change error:', err);
+          setError('사용자 정보를 불러오는 중 오류가 발생했습니다.');
+        } finally {
+          setLoading(false);
+        }
+      }, (err) => {
+        console.error('[Dashboard] Auth observer error:', err);
+        setError('인증 서비스에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.');
+        setLoading(false);
+      });
+    } catch (err) {
+      console.error('[Dashboard] Firebase initialization error:', err);
+      setError('서비스 초기화 중 오류가 발생했습니다.');
+      setLoading(false);
+    }
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [router, fetchUserData]);
 
   const handleLogout = async () => {
     await signOut();
@@ -65,8 +93,35 @@ export default function DashboardLayout({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-4">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <p className="text-gray-500 text-sm">로딩 중...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-4 p-4">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md text-center">
+          <div className="text-red-500 text-4xl mb-4">⚠️</div>
+          <h2 className="text-lg font-semibold text-red-700 mb-2">오류가 발생했습니다</h2>
+          <p className="text-red-600 text-sm mb-4">{error}</p>
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+            >
+              새로고침
+            </button>
+            <button
+              onClick={() => router.push('/login')}
+              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm"
+            >
+              로그인으로 돌아가기
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
