@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -13,6 +13,12 @@ import {
   saveDiagnosticResult,
   resetDiagnostic,
 } from '@/lib/firebase/firestore';
+
+// 게이미피케이션 임포트
+import { processProblemResult, processSessionComplete, type XpGainResult } from '@/lib/gamification/xp-system';
+import { recordActivity, isFirstActivityToday, getStreakData, type StreakData } from '@/lib/gamification/streak';
+import { XpGainNotification, XpToast } from '@/components/gamification/XpGainNotification';
+import { AchievementUnlock } from '@/components/gamification/AchievementUnlock';
 
 // 몰입 문제 난이도 타입
 type ImmersionDifficulty = '5min' | '10min' | '30min' | '1hour' | '1day' | '3days' | '7days' | '1month';
@@ -148,6 +154,19 @@ export default function PracticePage() {
   const [userAnswer, setUserAnswer] = useState('');
   const [timer, setTimer] = useState(0);
   const [problemLoading, setProblemLoading] = useState(false);
+
+  // 게이미피케이션 상태
+  const [xpResult, setXpResult] = useState<XpGainResult | null>(null);
+  const [unlockedAchievement, setUnlockedAchievement] = useState<string | null>(null);
+  const [streakData, setStreakData] = useState<StreakData | null>(null);
+  const [dailyFirst, setDailyFirst] = useState(false);
+  const [sessionStats, setSessionStats] = useState({
+    totalProblems: 0,
+    correctProblems: 0,
+    startTime: 0,
+    correctStreak: 0,
+  });
+  const [showXpToast, setShowXpToast] = useState<number | null>(null);
 
   // 인증 확인 및 기존 진단 결과 로드
   useEffect(() => {
@@ -401,7 +420,7 @@ export default function PracticePage() {
 
   // 세션 시작
   const startSession = async (session: ImmersionSession) => {
-    if (!diagnosticResult) return;
+    if (!diagnosticResult || !user) return;
 
     setSelectedSession(session);
     setTimer(0);
@@ -409,6 +428,35 @@ export default function PracticePage() {
     setShowSolution(false);
     setUserAnswer('');
     setStep('solving');
+
+    // 게이미피케이션: 활동 기록 및 스트릭 업데이트
+    try {
+      const isFirst = await isFirstActivityToday(user.uid);
+      setDailyFirst(isFirst);
+
+      if (isFirst) {
+        const streakResult = await recordActivity(user.uid);
+        setStreakData(streakResult.streakData);
+
+        // 스트릭 업적 해제 시 알림
+        if (streakResult.achievementsUnlocked.length > 0) {
+          setUnlockedAchievement(streakResult.achievementsUnlocked[0]);
+        }
+      } else {
+        const currentStreak = await getStreakData(user.uid);
+        setStreakData(currentStreak);
+      }
+    } catch (error) {
+      console.error('Error recording activity:', error);
+    }
+
+    // 세션 통계 초기화
+    setSessionStats({
+      totalProblems: 0,
+      correctProblems: 0,
+      startTime: Date.now(),
+      correctStreak: 0,
+    });
 
     await generateImmersionProblem(session.id);
   };
@@ -449,15 +497,97 @@ export default function PracticePage() {
   };
 
   // 세션 종료
-  const endSession = () => {
+  // 세션 종료 (XP 정산)
+  const endSession = async () => {
+    if (!user || !selectedSession) {
+      setStep('session_select');
+      setSelectedSession(null);
+      setCurrentProblem(null);
+      return;
+    }
+
+    // 세션 완료 XP 계산
+    try {
+      const timeSpentMinutes = Math.floor((Date.now() - sessionStats.startTime) / 60000);
+
+      // 몰입 상태 판정: 정확도 80% 이상 + 10분 이상 학습
+      const accuracy = sessionStats.totalProblems > 0
+        ? (sessionStats.correctProblems / sessionStats.totalProblems) * 100
+        : 0;
+      const inFlowState = accuracy >= 80 && timeSpentMinutes >= 10;
+
+      const result = await processSessionComplete(user.uid, {
+        totalProblems: sessionStats.totalProblems,
+        correctProblems: sessionStats.correctProblems,
+        timeSpentMinutes,
+        inFlowState,
+        dailyFirst,
+        currentStreak: streakData?.currentStreak || 0,
+      });
+
+      setXpResult(result);
+
+      // 업적 해제 알림
+      if (result.achievementsUnlocked.length > 0) {
+        setTimeout(() => {
+          setUnlockedAchievement(result.achievementsUnlocked[0]);
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Error processing session complete:', error);
+    }
+
     setStep('session_select');
     setSelectedSession(null);
     setCurrentProblem(null);
   };
 
-  // 새 문제 요청
-  const requestNewProblem = async () => {
-    if (!selectedSession) return;
+  // 새 문제 요청 (XP 부여)
+  const requestNewProblem = async (wasCorrect: boolean = true) => {
+    if (!selectedSession || !user) return;
+
+    // 문제 완료 시 XP 부여
+    try {
+      // 세션 통계 업데이트
+      setSessionStats(prev => ({
+        ...prev,
+        totalProblems: prev.totalProblems + 1,
+        correctProblems: wasCorrect ? prev.correctProblems + 1 : prev.correctProblems,
+        correctStreak: wasCorrect ? prev.correctStreak + 1 : 0,
+      }));
+
+      // XP 부여 (정답인 경우)
+      if (wasCorrect) {
+        const result = await processProblemResult(user.uid, {
+          correct: true,
+          timeSpent: timer,
+          firstTry: showHints === 0,
+          difficulty: selectedSession.id,
+          streakCount: sessionStats.correctStreak + 1,
+        });
+
+        if (result) {
+          // 작은 XP 토스트 표시
+          setShowXpToast(result.xpGained);
+
+          // 레벨업 시 큰 알림
+          if (result.leveledUp) {
+            setTimeout(() => setXpResult(result), 500);
+          }
+
+          // 업적 해제 알림
+          if (result.achievementsUnlocked.length > 0) {
+            setTimeout(() => {
+              setUnlockedAchievement(result.achievementsUnlocked[0]);
+            }, result.leveledUp ? 3000 : 1000);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error awarding XP:', error);
+    }
+
+    // 새 문제 생성
     setShowHints(0);
     setShowSolution(false);
     setUserAnswer('');
@@ -765,9 +895,9 @@ export default function PracticePage() {
                   <Button
                     variant="outline"
                     size="lg"
-                    onClick={requestNewProblem}
+                    onClick={() => requestNewProblem(false)}
                   >
-                    새 문제
+                    건너뛰기
                   </Button>
                 </div>
               </CardContent>
@@ -787,9 +917,9 @@ export default function PracticePage() {
                       variant="success"
                       size="lg"
                       className="flex-1"
-                      onClick={requestNewProblem}
+                      onClick={() => requestNewProblem(true)}
                     >
-                      다음 문제 도전 (+{selectedSession?.xpReward} XP)
+                      다음 문제 도전 (+XP)
                     </Button>
                     <Button
                       variant="outline"
@@ -805,6 +935,29 @@ export default function PracticePage() {
           </>
         ) : null}
       </div>
+
+      {/* 게이미피케이션 알림 컴포넌트 */}
+      {/* XP 획득 알림 (세션 종료 또는 레벨업 시) */}
+      {xpResult && (
+        <XpGainNotification
+          result={xpResult}
+          onClose={() => setXpResult(null)}
+        />
+      )}
+
+      {/* 작은 XP 토스트 (문제 정답 시) */}
+      {showXpToast !== null && (
+        <XpToast
+          amount={showXpToast}
+          onClose={() => setShowXpToast(null)}
+        />
+      )}
+
+      {/* 업적 해제 알림 */}
+      <AchievementUnlock
+        achievementId={unlockedAchievement}
+        onClose={() => setUnlockedAchievement(null)}
+      />
     </div>
   );
 }
