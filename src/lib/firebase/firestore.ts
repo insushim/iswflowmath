@@ -79,14 +79,29 @@ export async function endSession(
 }
 
 export async function getUserSessions(userId: string, limitCount = 10) {
-  const q = query(
-    collection(db, 'sessions'),
-    where('userId', '==', userId),
-    orderBy('startedAt', 'desc'),
-    limit(limitCount)
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  try {
+    const q = query(
+      collection(db, 'sessions'),
+      where('userId', '==', userId),
+      orderBy('startedAt', 'desc'),
+      limit(limitCount)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (error) {
+    console.warn('Firestore index error, using fallback:', error);
+    try {
+      const q = query(collection(db, 'sessions'), where('userId', '==', userId));
+      const snapshot = await getDocs(q);
+      return snapshot.docs
+        .map((d) => ({ id: d.id, ...d.data() } as any))
+        .sort((a, b) => (b.startedAt?.toMillis?.() || 0) - (a.startedAt?.toMillis?.() || 0))
+        .slice(0, limitCount);
+    } catch (fallbackError) {
+      console.error('Fallback also failed:', fallbackError);
+      return []; // 빈 배열 반환
+    }
+  }
 }
 
 // ============================================================
@@ -225,13 +240,27 @@ export async function unlockAchievement(userId: string, achievementId: string) {
 }
 
 export async function getUserAchievements(userId: string) {
-  const q = query(
-    collection(db, 'achievements'),
-    where('userId', '==', userId),
-    orderBy('unlockedAt', 'desc')
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  try {
+    const q = query(
+      collection(db, 'achievements'),
+      where('userId', '==', userId),
+      orderBy('unlockedAt', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (error) {
+    console.warn('Firestore index error, using fallback:', error);
+    try {
+      const q = query(collection(db, 'achievements'), where('userId', '==', userId));
+      const snapshot = await getDocs(q);
+      return snapshot.docs
+        .map((d) => ({ id: d.id, ...d.data() } as any))
+        .sort((a, b) => (b.unlockedAt?.toMillis?.() || 0) - (a.unlockedAt?.toMillis?.() || 0));
+    } catch (fallbackError) {
+      console.error('Fallback also failed:', fallbackError);
+      return [];
+    }
+  }
 }
 
 // ============================================================
@@ -286,14 +315,31 @@ export async function getUserDailyStats(userId: string, days = 7) {
   startDate.setDate(startDate.getDate() - days);
   const startDateStr = startDate.toISOString().split('T')[0];
 
-  const q = query(
-    collection(db, 'dailyStats'),
-    where('userId', '==', userId),
-    where('date', '>=', startDateStr),
-    orderBy('date', 'desc')
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  try {
+    // 복합 인덱스가 필요한 쿼리 - 인덱스 없으면 폴백
+    const q = query(
+      collection(db, 'dailyStats'),
+      where('userId', '==', userId),
+      where('date', '>=', startDateStr),
+      orderBy('date', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (error) {
+    console.warn('Firestore index error, using fallback:', error);
+    try {
+      // 폴백: userId만으로 필터링 후 클라이언트에서 처리
+      const q = query(collection(db, 'dailyStats'), where('userId', '==', userId));
+      const snapshot = await getDocs(q);
+      return snapshot.docs
+        .map((d) => ({ id: d.id, ...d.data() } as any))
+        .filter((d) => d.date && d.date >= startDateStr)
+        .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    } catch (fallbackError) {
+      console.error('Fallback also failed:', fallbackError);
+      return []; // 빈 배열 반환으로 무한 로딩 방지
+    }
+  }
 }
 
 // ============================================================

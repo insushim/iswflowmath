@@ -1,0 +1,609 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { auth, db } from '@/lib/firebase/config';
+import { getUserSessions, getUserDailyStats } from '@/lib/firebase/firestore';
+import { getStreakStats } from '@/lib/gamification/streak';
+import { calculateLevel, getLevelTitle } from '@/lib/gamification/constants';
+import { doc, getDoc } from 'firebase/firestore';
+import { MathTopic, MATH_TOPICS } from '@/types';
+import {
+  BarChart3,
+  TrendingUp,
+  Clock,
+  Flame,
+  Trophy,
+  Target,
+  BookOpen,
+  Zap,
+  Calendar,
+  ChevronRight,
+  Sparkles,
+} from 'lucide-react';
+
+interface UserAnalyticsData {
+  totalProblems: number;
+  correctProblems: number;
+  accuracyRate: number;
+  totalTimeMinutes: number;
+  avgTimePerProblem: number;
+  streakDays: number;
+  longestStreak: number;
+  flowTimePercentage: number;
+  currentLevel: number;
+  totalXp: number;
+  xpToNextLevel: number;
+  xpProgress: number;
+}
+
+interface WeeklyData {
+  day: string;
+  date: string;
+  problems: number;
+  minutes: number;
+  accuracy: number;
+  xp: number;
+}
+
+interface TopicMastery {
+  topic: string;
+  topicKey: MathTopic;
+  mastery: number;
+  problems: number;
+  correct: number;
+}
+
+interface RecentSession {
+  id: string;
+  date: string;
+  duration: number;
+  problems: number;
+  correct: number;
+  xp: number;
+  flowPercent: number;
+  topic: string;
+}
+
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  subValue,
+  gradient,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string | number;
+  subValue?: string;
+  gradient: string;
+}) {
+  return (
+    <div className={`relative overflow-hidden rounded-2xl ${gradient} p-5 shadow-lg`}>
+      <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent" />
+      <div className="absolute -top-8 -right-8 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
+      <div className="relative z-10">
+        <div className="inline-flex p-2 rounded-xl bg-white/20 mb-3">
+          <Icon className="w-5 h-5 text-white" />
+        </div>
+        <div className="text-white/80 text-sm font-medium mb-1">{label}</div>
+        <div className="text-3xl font-bold text-white tracking-tight">{value}</div>
+        {subValue && (
+          <div className="text-white/60 text-sm font-medium mt-1">{subValue}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function AnalyticsPage() {
+  const { user } = useAuth();
+  const [timeRange, setTimeRange] = useState<'week' | 'month' | 'all'>('week');
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<UserAnalyticsData | null>(null);
+  const [weeklyData, setWeeklyData] = useState<WeeklyData[]>([]);
+  const [topicMastery, setTopicMastery] = useState<TopicMastery[]>([]);
+  const [recentSessions, setRecentSessions] = useState<RecentSession[]>([]);
+
+  useEffect(() => {
+    async function loadAnalyticsData() {
+      if (!user?.uid) return;
+
+      setLoading(true);
+      try {
+        const userRef = doc(db, 'users', user.uid);
+        const userDoc = await getDoc(userRef);
+        const userData = userDoc.exists() ? userDoc.data() : {};
+
+        const streakStats = await getStreakStats(user.uid);
+        const days = timeRange === 'week' ? 7 : timeRange === 'month' ? 30 : 365;
+        const dailyStats = await getUserDailyStats(user.uid, days);
+        const sessions = await getUserSessions(user.uid, 10);
+
+        const totalProblems = dailyStats.reduce((sum: number, d: any) => sum + (d.problemsSolved || 0), 0);
+        const correctProblems = dailyStats.reduce((sum: number, d: any) => sum + (d.problemsCorrect || 0), 0);
+        const totalTime = dailyStats.reduce((sum: number, d: any) => sum + (d.timeSpentMinutes || 0), 0);
+        const totalFlowTime = dailyStats.reduce((sum: number, d: any) => {
+          const flowPct = d.flowPercentage || 50;
+          return sum + ((d.timeSpentMinutes || 0) * flowPct / 100);
+        }, 0);
+
+        const totalXp = userData.totalXp || 0;
+        const levelData = calculateLevel(totalXp);
+
+        setStats({
+          totalProblems,
+          correctProblems,
+          accuracyRate: totalProblems > 0 ? Math.round((correctProblems / totalProblems) * 1000) / 10 : 0,
+          totalTimeMinutes: totalTime,
+          avgTimePerProblem: totalProblems > 0 ? Math.round((totalTime * 60) / totalProblems) : 0,
+          streakDays: streakStats.currentStreak,
+          longestStreak: streakStats.longestStreak,
+          flowTimePercentage: totalTime > 0 ? Math.round((totalFlowTime / totalTime) * 100) : 0,
+          currentLevel: levelData.level,
+          totalXp,
+          xpToNextLevel: levelData.xpToNext,
+          xpProgress: levelData.progress,
+        });
+
+        const weekDays = ['일', '월', '화', '수', '목', '금', '토'];
+        const last7Days: WeeklyData[] = [];
+        for (let i = 6; i >= 0; i--) {
+          const date = new Date();
+          date.setDate(date.getDate() - i);
+          const dateStr = date.toISOString().split('T')[0];
+          const dayData = dailyStats.find((d: any) => d.date === dateStr) as any;
+
+          last7Days.push({
+            day: weekDays[date.getDay()],
+            date: dateStr,
+            problems: dayData?.problemsSolved || 0,
+            minutes: dayData?.timeSpentMinutes || 0,
+            accuracy: dayData?.problemsSolved > 0
+              ? Math.round((dayData.problemsCorrect / dayData.problemsSolved) * 100)
+              : 0,
+            xp: dayData?.xpEarned || 0,
+          });
+        }
+        setWeeklyData(last7Days);
+
+        const topicStats: Record<string, { problems: number; correct: number }> = {};
+        dailyStats.forEach((day: any) => {
+          const topics = day.topicsPracticed || [];
+          topics.forEach((topic: string) => {
+            if (!topicStats[topic]) {
+              topicStats[topic] = { problems: 0, correct: 0 };
+            }
+            const perTopic = Math.ceil((day.problemsSolved || 0) / topics.length);
+            const correctPerTopic = Math.ceil((day.problemsCorrect || 0) / topics.length);
+            topicStats[topic].problems += perTopic;
+            topicStats[topic].correct += correctPerTopic;
+          });
+        });
+
+        const masteryData: TopicMastery[] = Object.entries(topicStats)
+          .map(([topic, data]) => ({
+            topic: MATH_TOPICS[topic as MathTopic] || topic,
+            topicKey: topic as MathTopic,
+            mastery: data.problems > 0 ? Math.round((data.correct / data.problems) * 100) : 0,
+            problems: data.problems,
+            correct: data.correct,
+          }))
+          .sort((a, b) => b.mastery - a.mastery)
+          .slice(0, 6);
+
+        setTopicMastery(masteryData);
+
+        const recentSessionData: RecentSession[] = sessions.slice(0, 5).map((session: any) => {
+          const startedAt = session.startedAt?.toDate?.() || new Date(session.startedAt);
+          const endedAt = session.endedAt?.toDate?.() || new Date();
+          const duration = Math.round((endedAt.getTime() - startedAt.getTime()) / 60000);
+
+          return {
+            id: session.id,
+            date: startedAt.toISOString().split('T')[0],
+            duration: duration > 0 ? duration : 1,
+            problems: session.problemsAttempted || 0,
+            correct: session.problemsCorrect || 0,
+            xp: session.xpEarned || 0,
+            flowPercent: session.flowPercentage || 50,
+            topic: MATH_TOPICS[session.topic as MathTopic] || session.topic || '일반',
+          };
+        });
+        setRecentSessions(recentSessionData);
+
+      } catch (error) {
+        console.error('Failed to load analytics data:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadAnalyticsData();
+  }, [user, timeRange]);
+
+  const maxProblems = Math.max(...weeklyData.map((d) => d.problems), 1);
+
+  const formatNumber = (num: number) => {
+    if (num >= 1000) return `${(num / 1000).toFixed(1)}k`;
+    return num.toString();
+  };
+
+  const formatTime = (minutes: number) => {
+    if (minutes >= 60) {
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      return mins > 0 ? `${hours}시간 ${mins}분` : `${hours}시간`;
+    }
+    return `${minutes}분`;
+  };
+
+  if (loading) {
+    return (
+      <div className="p-6 lg:p-8 max-w-7xl mx-auto">
+        <div className="space-y-6">
+          <div className="h-8 w-48 bg-white/5 rounded-lg animate-pulse" />
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="h-32 bg-white/5 rounded-2xl animate-pulse" />
+            ))}
+          </div>
+          <div className="grid lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 h-80 bg-white/5 rounded-2xl animate-pulse" />
+            <div className="h-80 bg-white/5 rounded-2xl animate-pulse" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
+              <BarChart3 className="w-5 h-5 text-white" />
+            </div>
+            <h1 className="text-2xl lg:text-3xl font-bold text-white">학습 통계</h1>
+          </div>
+          <p className="text-slate-400">학습 진행 상황과 성과를 한눈에 확인하세요</p>
+        </div>
+
+        {/* Time Range Selector */}
+        <div className="flex gap-1 p-1 bg-white/5 rounded-xl">
+          {[
+            { value: 'week', label: '이번 주' },
+            { value: 'month', label: '이번 달' },
+            { value: 'all', label: '전체' },
+          ].map((option) => (
+            <button
+              key={option.value}
+              onClick={() => setTimeRange(option.value as typeof timeRange)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                timeRange === option.value
+                  ? 'bg-gradient-to-r from-indigo-500 to-violet-600 text-white'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <StatCard
+          icon={BookOpen}
+          label="총 문제 수"
+          value={formatNumber(stats?.totalProblems || 0)}
+          subValue={timeRange === 'week' ? '이번 주' : timeRange === 'month' ? '이번 달' : '전체 기간'}
+          gradient="bg-gradient-to-br from-blue-500 to-indigo-600"
+        />
+        <StatCard
+          icon={Target}
+          label="정답률"
+          value={`${stats?.accuracyRate || 0}%`}
+          subValue={`${stats?.correctProblems || 0}/${stats?.totalProblems || 0} 정답`}
+          gradient="bg-gradient-to-br from-emerald-500 to-teal-600"
+        />
+        <StatCard
+          icon={Clock}
+          label="학습 시간"
+          value={`${Math.floor((stats?.totalTimeMinutes || 0) / 60)}h`}
+          subValue={`${(stats?.totalTimeMinutes || 0) % 60}분`}
+          gradient="bg-gradient-to-br from-violet-500 to-purple-600"
+        />
+        <StatCard
+          icon={Flame}
+          label="연속 학습"
+          value={`${stats?.streakDays || 0}일`}
+          subValue={`최장 ${stats?.longestStreak || 0}일`}
+          gradient="bg-gradient-to-br from-amber-500 to-orange-600"
+        />
+      </div>
+
+      {/* Main Content Grid */}
+      <div className="grid lg:grid-cols-3 gap-6 mb-6">
+        {/* Weekly Chart */}
+        <div className="lg:col-span-2 glass-card p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 flex items-center justify-center">
+                <TrendingUp className="w-5 h-5 text-indigo-400" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-white">주간 학습 현황</h3>
+                <p className="text-sm text-slate-500">최근 7일간의 학습 기록</p>
+              </div>
+            </div>
+            <span className="text-sm font-medium text-indigo-400 bg-indigo-500/10 px-3 py-1 rounded-full">
+              {weeklyData.reduce((sum, d) => sum + d.problems, 0)} 문제
+            </span>
+          </div>
+
+          {/* Chart */}
+          <div className="flex items-end justify-between h-48 gap-3 px-2 mb-4">
+            {weeklyData.map((data, index) => {
+              const height = maxProblems > 0 ? (data.problems / maxProblems) * 100 : 0;
+              const isToday = index === weeklyData.length - 1;
+
+              return (
+                <div key={data.day} className="flex-1 flex flex-col items-center group cursor-pointer">
+                  <div className="opacity-0 group-hover:opacity-100 transition-all mb-2 px-2 py-1 bg-slate-800 text-white text-xs rounded-lg whitespace-nowrap">
+                    <div className="font-semibold">{data.problems}문제</div>
+                    <div className="text-slate-400">{data.accuracy}%</div>
+                  </div>
+                  <div
+                    className={`w-full rounded-xl transition-all duration-300 ${
+                      isToday
+                        ? 'bg-gradient-to-t from-indigo-600 to-violet-500 shadow-lg shadow-indigo-500/30'
+                        : data.problems > 0
+                        ? 'bg-gradient-to-t from-slate-600 to-slate-500 group-hover:from-indigo-500 group-hover:to-violet-400'
+                        : 'bg-slate-700/50'
+                    }`}
+                    style={{ height: `${Math.max(height, 8)}%`, minHeight: '8px' }}
+                  />
+                  <div className={`text-xs mt-2 font-medium ${isToday ? 'text-indigo-400' : 'text-slate-500'}`}>
+                    {data.day}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Weekly Summary */}
+          <div className="grid grid-cols-3 gap-4 pt-4 border-t border-white/5">
+            <div className="text-center p-3 rounded-xl bg-white/5">
+              <div className="text-xl font-bold text-white">
+                {weeklyData.reduce((sum, d) => sum + d.problems, 0)}
+              </div>
+              <div className="text-xs text-slate-500">총 문제</div>
+            </div>
+            <div className="text-center p-3 rounded-xl bg-white/5">
+              <div className="text-xl font-bold text-white">
+                {formatTime(weeklyData.reduce((sum, d) => sum + d.minutes, 0))}
+              </div>
+              <div className="text-xs text-slate-500">총 학습</div>
+            </div>
+            <div className="text-center p-3 rounded-xl bg-white/5">
+              <div className="text-xl font-bold text-white">
+                {weeklyData.filter(d => d.problems > 0).length}일
+              </div>
+              <div className="text-xs text-slate-500">활동일</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Level Progress */}
+        <div className="glass-card p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500/20 to-purple-500/20 flex items-center justify-center">
+              <Trophy className="w-5 h-5 text-violet-400" />
+            </div>
+            <h3 className="font-semibold text-white">레벨 & 경험치</h3>
+          </div>
+
+          <div className="flex flex-col items-center">
+            {/* Level Badge */}
+            <div className="relative mb-4">
+              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg shadow-violet-500/30">
+                <span className="text-4xl font-bold text-white">
+                  {stats?.currentLevel || 1}
+                </span>
+              </div>
+              <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg border-2 border-slate-900">
+                <Sparkles className="w-4 h-4 text-white" />
+              </div>
+            </div>
+
+            <div className="text-center mb-4">
+              <div className="text-sm text-slate-400 mb-1">
+                {getLevelTitle(stats?.currentLevel || 1)}
+              </div>
+              <div className="text-xl font-bold text-white">
+                {formatNumber(stats?.totalXp || 0)} XP
+              </div>
+            </div>
+
+            {/* XP Progress */}
+            <div className="w-full mb-2">
+              <div className="relative h-2.5 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-violet-500 to-indigo-500 rounded-full transition-all duration-500"
+                  style={{ width: `${stats?.xpProgress || 0}%` }}
+                />
+              </div>
+            </div>
+            <div className="flex justify-between w-full text-xs text-slate-500">
+              <span>Lv.{stats?.currentLevel || 1}</span>
+              <span className="text-violet-400">{stats?.xpToNextLevel || 0} XP 남음</span>
+              <span>Lv.{(stats?.currentLevel || 1) + 1}</span>
+            </div>
+
+            {/* Flow State */}
+            <div className="w-full mt-6 p-4 bg-white/5 rounded-xl">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-indigo-400" />
+                  <span className="text-sm font-medium text-slate-300">몰입 학습</span>
+                </div>
+                <span className="text-lg font-bold text-indigo-400">
+                  {stats?.flowTimePercentage || 0}%
+                </span>
+              </div>
+              <div className="relative h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full"
+                  style={{ width: `${stats?.flowTimePercentage || 0}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Section */}
+      <div className="grid lg:grid-cols-2 gap-6">
+        {/* Topic Mastery */}
+        <div className="glass-card p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center">
+              <BookOpen className="w-5 h-5 text-emerald-400" />
+            </div>
+            <h3 className="font-semibold text-white">주제별 숙련도</h3>
+          </div>
+
+          {topicMastery.length > 0 ? (
+            <div className="space-y-4">
+              {topicMastery.map((topic, index) => {
+                const colors = [
+                  'from-blue-500 to-cyan-500',
+                  'from-emerald-500 to-teal-500',
+                  'from-violet-500 to-purple-500',
+                  'from-amber-500 to-orange-500',
+                  'from-rose-500 to-pink-500',
+                  'from-indigo-500 to-blue-500',
+                ];
+                const color = colors[index % colors.length];
+
+                return (
+                  <div
+                    key={topic.topicKey}
+                    className="p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-all"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="font-medium text-white">{topic.topic}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-500 bg-white/5 px-2 py-1 rounded-full">
+                          {topic.problems}문제
+                        </span>
+                        <span className="text-lg font-bold text-white">
+                          {topic.mastery}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="relative h-2 bg-white/10 rounded-full overflow-hidden">
+                      <div
+                        className={`absolute inset-y-0 left-0 bg-gradient-to-r ${color} rounded-full transition-all`}
+                        style={{ width: `${topic.mastery}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <BookOpen className="w-12 h-12 mx-auto mb-3 text-slate-600" />
+              <p className="text-slate-400 font-medium">아직 학습 기록이 없습니다</p>
+              <p className="text-sm text-slate-500 mt-1">문제를 풀면 주제별 숙련도가 표시됩니다</p>
+            </div>
+          )}
+        </div>
+
+        {/* Recent Sessions */}
+        <div className="glass-card p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 flex items-center justify-center">
+                <Clock className="w-5 h-5 text-amber-400" />
+              </div>
+              <h3 className="font-semibold text-white">최근 학습</h3>
+            </div>
+            <button className="text-sm text-slate-400 hover:text-indigo-400 flex items-center gap-1 transition-colors">
+              더보기 <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {recentSessions.length > 0 ? (
+            <div className="space-y-3">
+              {recentSessions.map((session) => {
+                const accuracy = session.problems > 0
+                  ? Math.round((session.correct / session.problems) * 100)
+                  : 0;
+
+                return (
+                  <div
+                    key={session.id}
+                    className="flex items-center gap-4 p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-all cursor-pointer"
+                  >
+                    <div className="min-w-[60px]">
+                      <div className="text-sm font-semibold text-white">
+                        {new Date(session.date).toLocaleDateString('ko-KR', {
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </div>
+                      <div className="text-xs text-slate-500">{session.duration}분</div>
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xs bg-white/10 text-slate-300 px-2 py-0.5 rounded-full">
+                          {session.topic}
+                        </span>
+                        <span className="text-sm text-slate-400">
+                          {session.correct}/{session.problems} 정답
+                        </span>
+                      </div>
+                      <div className="relative h-1.5 bg-white/10 rounded-full overflow-hidden">
+                        <div
+                          className={`absolute inset-y-0 left-0 rounded-full ${
+                            accuracy >= 80
+                              ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                              : accuracy >= 60
+                              ? 'bg-gradient-to-r from-amber-500 to-yellow-400'
+                              : 'bg-gradient-to-r from-slate-500 to-slate-400'
+                          }`}
+                          style={{ width: `${accuracy}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <span className="inline-flex px-2 py-1 rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 text-white text-xs font-medium">
+                        +{session.xp} XP
+                      </span>
+                      <div className="text-xs text-slate-500 mt-1">
+                        {accuracy}% 정답률
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <Zap className="w-12 h-12 mx-auto mb-3 text-slate-600" />
+              <p className="text-slate-400 font-medium">아직 학습 세션이 없습니다</p>
+              <p className="text-sm text-slate-500 mt-1">첫 학습을 시작해보세요!</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

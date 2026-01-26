@@ -1,0 +1,10 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { motion } from 'framer-motion';
+import { useAuth } from '@/hooks/useAuth';
+import { getUserAchievements, getUserProgressSummary } from '@/lib/firebase/firestore';
+import { Trophy, Target, Flame, Zap, Star, Clock, Award, TrendingUp, Lock } from 'lucide-react';

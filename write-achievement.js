@@ -1,0 +1,1 @@
+const fs = require('fs'); fs.writeFileSync('src/app/(dashboard)/achievements/page.tsx', fs.readFileSync('achievement-content.txt', 'utf-8')); console.log('done');

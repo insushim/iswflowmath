@@ -9,13 +9,25 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/config';
 import { doc, getDoc } from 'firebase/firestore';
 import { signOut } from '@/lib/firebase/auth';
+import {
+  LayoutDashboard,
+  PenTool,
+  BarChart3,
+  Trophy,
+  Settings,
+  LogOut,
+  Menu,
+  X,
+  Sparkles,
+  Zap,
+} from 'lucide-react';
 
 const navigation = [
-  { name: '대시보드', href: '/dashboard', icon: '📊' },
-  { name: '학습하기', href: '/practice', icon: '✏️' },
-  { name: '통계', href: '/analytics', icon: '📈' },
-  { name: '업적', href: '/achievements', icon: '🏆' },
-  { name: '설정', href: '/settings', icon: '⚙️' },
+  { name: '대시보드', href: '/dashboard', icon: LayoutDashboard },
+  { name: '학습하기', href: '/practice', icon: PenTool },
+  { name: '통계', href: '/analytics', icon: BarChart3 },
+  { name: '업적', href: '/achievements', icon: Trophy },
+  { name: '설정', href: '/settings', icon: Settings },
 ];
 
 interface UserData {
@@ -39,6 +51,7 @@ export default function DashboardLayout({
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const fetchUserData = useCallback(async (firebaseUser: User) => {
     try {
@@ -48,7 +61,6 @@ export default function DashboardLayout({
       }
     } catch (err) {
       console.error('[Dashboard] Failed to fetch user data:', err);
-      // Firestore 오류가 있어도 기본 사용자 정보는 표시
     }
   }, []);
 
@@ -93,30 +105,35 @@ export default function DashboardLayout({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-4">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-        <p className="text-gray-500 text-sm">로딩 중...</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center gap-4">
+        <div className="relative">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 animate-pulse" />
+          <div className="absolute inset-0 w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 animate-ping opacity-20" />
+        </div>
+        <p className="text-slate-400 text-sm animate-pulse">로딩 중...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-4 p-4">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md text-center">
-          <div className="text-red-500 text-4xl mb-4">⚠️</div>
-          <h2 className="text-lg font-semibold text-red-700 mb-2">오류가 발생했습니다</h2>
-          <p className="text-red-600 text-sm mb-4">{error}</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center gap-4 p-4">
+        <div className="glass-card p-8 max-w-md text-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-red-500/10 flex items-center justify-center">
+            <X className="w-8 h-8 text-red-400" />
+          </div>
+          <h2 className="text-lg font-semibold text-white mb-2">오류가 발생했습니다</h2>
+          <p className="text-slate-400 text-sm mb-6">{error}</p>
           <div className="flex gap-3 justify-center">
             <button
               onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+              className="btn-primary"
             >
               새로고침
             </button>
             <button
               onClick={() => router.push('/login')}
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm"
+              className="btn-secondary"
             >
               로그인으로 돌아가기
             </button>
@@ -132,59 +149,111 @@ export default function DashboardLayout({
 
   const displayName = userData?.name || user.displayName || '사용자';
   const currentLevel = userData?.currentLevel || 1;
+  const totalXp = userData?.totalXp || 0;
+  const xpProgress = (totalXp % 100);
+  const streakDays = userData?.streakDays || 0;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-white border-r hidden md:block">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+      {/* Ambient background effects */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl" />
+      </div>
+
+      {/* Sidebar - Desktop */}
+      <aside className="fixed left-0 top-0 z-40 h-screen w-72 glass border-r border-white/5 hidden lg:block">
         <div className="flex h-full flex-col">
           {/* Logo */}
-          <div className="flex h-16 items-center gap-2 px-6 border-b">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold">M</span>
+          <div className="flex h-20 items-center gap-3 px-6 border-b border-white/5">
+            <div className="relative">
+              <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/25">
+                <Sparkles className="w-5 h-5 text-white" />
+              </div>
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 border-slate-900" />
             </div>
-            <span className="font-bold text-lg bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              MathFlow
-            </span>
+            <div>
+              <span className="font-bold text-xl gradient-text-vibrant">
+                MathFlow
+              </span>
+              <p className="text-[10px] text-slate-500 font-medium tracking-wider uppercase">AI 수학 학습</p>
+            </div>
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-4 py-4 space-y-1">
+          <nav className="flex-1 px-4 py-6 space-y-1.5">
             {navigation.map((item) => {
               const isActive = pathname === item.href;
+              const Icon = item.icon;
               return (
                 <Link
                   key={item.name}
                   href={item.href}
                   className={cn(
-                    'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                    'group flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200',
                     isActive
-                      ? 'bg-blue-50 text-blue-600'
-                      : 'text-gray-600 hover:bg-gray-100'
+                      ? 'bg-gradient-to-r from-indigo-500/20 to-violet-500/20 text-white shadow-lg shadow-indigo-500/10 border border-indigo-500/20'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
                   )}
                 >
-                  <span>{item.icon}</span>
-                  {item.name}
+                  <Icon className={cn(
+                    'w-5 h-5 transition-colors',
+                    isActive ? 'text-indigo-400' : 'text-slate-500 group-hover:text-indigo-400'
+                  )} />
+                  <span>{item.name}</span>
+                  {isActive && (
+                    <div className="ml-auto w-1.5 h-1.5 bg-indigo-400 rounded-full" />
+                  )}
                 </Link>
               );
             })}
           </nav>
 
-          {/* User */}
-          <div className="p-4 border-t">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white font-medium">
-                {displayName.charAt(0)}
+          {/* XP Progress Card */}
+          <div className="mx-4 mb-4 p-4 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-violet-500/10 border border-white/5">
+            <div className="flex items-center gap-2 mb-3">
+              <Zap className="w-4 h-4 text-amber-400" />
+              <span className="text-xs font-semibold text-slate-300">오늘의 진행</span>
+            </div>
+            <div className="progress-modern mb-2">
+              <div
+                className="progress-modern-bar"
+                style={{ width: `${xpProgress}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-slate-500">{xpProgress} XP</span>
+              <span className="text-slate-400">100 XP 목표</span>
+            </div>
+          </div>
+
+          {/* User Profile */}
+          <div className="p-4 border-t border-white/5">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="relative">
+                <div className="w-12 h-12 bg-gradient-to-br from-indigo-400 via-violet-500 to-fuchsia-500 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-violet-500/25">
+                  {displayName.charAt(0)}
+                </div>
+                {streakDays > 0 && (
+                  <div className="absolute -bottom-1 -right-1 bg-amber-500 text-[10px] font-bold text-white px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                    🔥 {streakDays}
+                  </div>
+                )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{displayName}</p>
-                <p className="text-xs text-gray-500">Level {currentLevel}</p>
+                <p className="text-sm font-semibold text-white truncate">{displayName}</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-indigo-400 font-medium">Lv. {currentLevel}</span>
+                  <span className="text-slate-600">•</span>
+                  <span className="text-xs text-slate-500">{totalXp} XP</span>
+                </div>
               </div>
             </div>
             <button
               onClick={handleLogout}
-              className="mt-3 w-full text-sm text-gray-500 hover:text-red-600 transition-colors text-left px-1"
+              className="w-full flex items-center justify-center gap-2 py-2.5 text-sm text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all duration-200"
             >
+              <LogOut className="w-4 h-4" />
               로그아웃
             </button>
           </div>
@@ -192,39 +261,77 @@ export default function DashboardLayout({
       </aside>
 
       {/* Mobile header */}
-      <header className="fixed top-0 left-0 right-0 z-30 h-16 bg-white border-b md:hidden">
-        <div className="flex h-full items-center justify-between px-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold">M</span>
+      <header className="fixed top-0 left-0 right-0 z-50 glass border-b border-white/5 lg:hidden">
+        <div className="flex h-16 items-center justify-between px-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-xl flex items-center justify-center">
+              <Sparkles className="w-4 h-4 text-white" />
             </div>
-            <span className="font-bold">MathFlow</span>
+            <span className="font-bold text-lg gradient-text-vibrant">MathFlow</span>
           </div>
           <button
-            onClick={handleLogout}
-            className="text-sm text-gray-500 hover:text-red-600"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 text-slate-400 hover:text-white transition-colors"
           >
-            로그아웃
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
+
+        {/* Mobile menu dropdown */}
+        {mobileMenuOpen && (
+          <div className="absolute top-full left-0 right-0 glass border-b border-white/5 p-4 space-y-2 animate-fade-in">
+            {navigation.map((item) => {
+              const isActive = pathname === item.href;
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={cn(
+                    'flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors',
+                    isActive
+                      ? 'bg-indigo-500/20 text-white'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  )}
+                >
+                  <Icon className="w-5 h-5" />
+                  {item.name}
+                </Link>
+              );
+            })}
+            <div className="pt-2 border-t border-white/10">
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+              >
+                <LogOut className="w-5 h-5" />
+                로그아웃
+              </button>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Mobile bottom navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t md:hidden">
-        <div className="flex justify-around py-2">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 glass border-t border-white/5 lg:hidden safe-area-bottom">
+        <div className="flex justify-around py-2 px-2">
           {navigation.slice(0, 4).map((item) => {
             const isActive = pathname === item.href;
+            const Icon = item.icon;
             return (
               <Link
                 key={item.name}
                 href={item.href}
                 className={cn(
-                  'flex flex-col items-center gap-1 px-3 py-1',
-                  isActive ? 'text-blue-600' : 'text-gray-600'
+                  'flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all duration-200',
+                  isActive
+                    ? 'text-indigo-400 bg-indigo-500/10'
+                    : 'text-slate-500 hover:text-slate-300'
                 )}
               >
-                <span className="text-xl">{item.icon}</span>
-                <span className="text-xs">{item.name}</span>
+                <Icon className="w-5 h-5" />
+                <span className="text-[10px] font-medium">{item.name}</span>
               </Link>
             );
           })}
@@ -232,7 +339,7 @@ export default function DashboardLayout({
       </nav>
 
       {/* Main content */}
-      <main className="md:ml-64 pt-16 md:pt-0 pb-20 md:pb-0 min-h-screen">
+      <main className="lg:ml-72 pt-16 lg:pt-0 pb-24 lg:pb-0 min-h-screen relative z-10">
         {children}
       </main>
     </div>

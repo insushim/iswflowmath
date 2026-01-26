@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useAuth } from '@/lib/firebase/auth-context';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { auth } from '@/lib/firebase/config';
 import { getUserSessions, getUserDailyStats } from '@/lib/firebase/firestore';
 import { getStreakStats } from '@/lib/gamification/streak';
 import { calculateLevel, getLevelTitle } from '@/lib/gamification/constants';
@@ -189,7 +190,16 @@ function BentoCard({
 }
 
 export default function AnalyticsPage() {
-  const { user } = useAuth();
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
   const [timeRange, setTimeRange] = useState<'week' | 'month' | 'all'>('week');
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<UserAnalyticsData | null>(null);
@@ -200,7 +210,7 @@ export default function AnalyticsPage() {
   // 데이터 로드
   useEffect(() => {
     async function loadAnalyticsData() {
-      if (!user?.uid) return;
+      if (authLoading || !user?.uid) { if (!authLoading && !user) { setLoading(false); } return; }
 
       setLoading(true);
       try {
@@ -323,7 +333,7 @@ export default function AnalyticsPage() {
     }
 
     loadAnalyticsData();
-  }, [user, timeRange]);
+  }, [user, authLoading, timeRange]);
 
   const maxProblems = Math.max(...weeklyData.map((d) => d.problems), 1);
 
@@ -398,7 +408,7 @@ export default function AnalyticsPage() {
 
         {/* 주요 통계 카드 - Bento Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5 mb-8">
-          {loading ? (
+          {(loading || authLoading) ? (
             <>
               <StatCardSkeleton />
               <StatCardSkeleton />
@@ -467,7 +477,7 @@ export default function AnalyticsPage() {
                 </Badge>
               </div>
 
-              {loading ? (
+              {(loading || authLoading) ? (
                 <ChartSkeleton />
               ) : (
                 <>
@@ -550,7 +560,7 @@ export default function AnalyticsPage() {
                 <h3 className="text-lg font-semibold text-slate-800">레벨 & 경험치</h3>
               </div>
 
-              {loading ? (
+              {(loading || authLoading) ? (
                 <div className="flex-1 flex items-center justify-center">
                   <div className="w-24 h-24 bg-slate-200/80 rounded-full animate-pulse" />
                 </div>
@@ -645,7 +655,7 @@ export default function AnalyticsPage() {
                 <h3 className="text-lg font-semibold text-slate-800">주제별 숙련도</h3>
               </div>
 
-              {loading ? (
+              {(loading || authLoading) ? (
                 <div className="space-y-4">
                   {[...Array(4)].map((_, i) => (
                     <div key={i} className="flex items-center gap-4 animate-pulse">
@@ -724,7 +734,7 @@ export default function AnalyticsPage() {
                 </button>
               </div>
 
-              {loading ? (
+              {(loading || authLoading) ? (
                 <div className="space-y-3">
                   {[...Array(3)].map((_, i) => (
                     <div key={i} className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl animate-pulse">

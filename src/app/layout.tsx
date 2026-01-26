@@ -27,8 +27,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko" suppressHydrationWarning>
-      <body className={`${notoSansKR.variable} font-sans antialiased`}>
+    <html lang="ko" className="dark" suppressHydrationWarning>
+      <body className={`${notoSansKR.variable} font-sans antialiased bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 min-h-screen`}>
         {children}
       </body>
     </html>

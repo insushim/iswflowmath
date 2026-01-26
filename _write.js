@@ -1,0 +1,1 @@
+﻿const fs = require("fs"); const c = process.argv[1]; fs.writeFileSync("src/app/(dashboard)/achievements/page.tsx", Buffer.from(c, "base64").toString("utf8")); console.log("done");
