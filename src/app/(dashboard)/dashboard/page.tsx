@@ -333,16 +333,16 @@ export default function DashboardPage() {
         </div>
 
         {/* Level */}
-        <div className="bento-card-gradient group">
+        <div className="bento-card group bg-gradient-to-br from-indigo-500 via-violet-500 to-purple-600">
           <div className="flex items-start justify-between mb-4">
-            <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center">
               <Zap className="w-6 h-6 text-white" />
             </div>
-            <span className="text-xs font-medium text-white/60">{xpProgress}/100 XP</span>
+            <span className="text-xs font-medium text-white/80">{xpProgress}/100 XP</span>
           </div>
           <div className="text-3xl font-bold text-white mb-1">Lv.{level}</div>
-          <div className="text-sm text-white/70">현재 레벨</div>
-          <div className="mt-3 h-1.5 bg-white/20 rounded-full overflow-hidden">
+          <div className="text-sm text-white/80">현재 레벨</div>
+          <div className="mt-3 h-1.5 bg-white/30 rounded-full overflow-hidden">
             <div
               className="h-full rounded-full bg-white transition-all duration-500"
               style={{ width: `${xpProgress}%` }}

@@ -510,7 +510,7 @@ export default function AnalyticsPage() {
                               isToday
                                 ? 'bg-gradient-to-t from-blue-600 via-blue-500 to-indigo-400 shadow-lg shadow-blue-500/40'
                                 : data.problems > 0
-                                ? 'bg-gradient-to-t from-slate-300 to-slate-200 group-hover:from-blue-400 group-hover:to-blue-300 group-hover:shadow-lg group-hover:shadow-blue-400/30'
+                                ? 'bg-gradient-to-t from-slate-600 to-slate-500 group-hover:from-blue-400 group-hover:to-blue-300 group-hover:shadow-lg group-hover:shadow-blue-400/30'
                                 : 'bg-slate-700'
                             }`}
                           />
@@ -526,19 +526,19 @@ export default function AnalyticsPage() {
 
                   {/* 주간 요약 */}
                   <div className="mt-6 pt-5 border-t border-white/10 grid grid-cols-3 gap-4">
-                    <div className="text-center p-3 rounded-2xl bg-slate-50/80">
+                    <div className="text-center p-3 rounded-2xl bg-slate-800/60">
                       <div className="text-2xl font-bold text-white">
                         {weeklyData.reduce((sum, d) => sum + d.problems, 0)}
                       </div>
                       <div className="text-xs text-slate-400 font-medium">총 문제</div>
                     </div>
-                    <div className="text-center p-3 rounded-2xl bg-slate-50/80">
+                    <div className="text-center p-3 rounded-2xl bg-slate-800/60">
                       <div className="text-2xl font-bold text-white">
                         {formatTime(weeklyData.reduce((sum, d) => sum + d.minutes, 0))}
                       </div>
                       <div className="text-xs text-slate-400 font-medium">총 학습</div>
                     </div>
-                    <div className="text-center p-3 rounded-2xl bg-slate-50/80">
+                    <div className="text-center p-3 rounded-2xl bg-slate-800/60">
                       <div className="text-2xl font-bold text-white">
                         {weeklyData.filter(d => d.problems > 0).length}일
                       </div>
