@@ -26,6 +26,14 @@ import {
   getNotIncluded,
   CurriculumStandard,
 } from '@/data/curriculum-standards';
+// 교차검증된 교육과정 참고 데이터 (10개 이상 출처)
+import {
+  generateProblemContext,
+  getRecommendedBloomLevels,
+  getMisconceptionsForTopic,
+  calculateProbability,
+  TARGET_SUCCESS_RATE,
+} from './curriculum-reference-data';
 
 // ============================================================
 // 전문가 출제 워크플로우 상수 정의
@@ -179,12 +187,20 @@ function getGradeLabel(grade: number): string {
  * 6. 검토 및 수정
  */
 export async function generateProblem(
-  request: GenerateProblemRequest
+  request: GenerateProblemRequest & { recentSuccessRate?: number }
 ): Promise<ProblemWithIRT> {
-  const { topic, theta, grade, previous_problems = [] } = request;
+  const { topic, theta, grade, previous_problems = [], recentSuccessRate = 0.75 } = request;
 
-  // 목표 난이도 계산 (IRT 기반 70% 정답률 목표)
-  const targetB = calculateTargetDifficulty(theta, 0.7);
+  // ============================================================
+  // 교차검증된 교육과정 데이터 기반 문제 컨텍스트 생성
+  // (PISA, TIMSS, CCSS, Bloom's, Flow이론, IRT, 한국교육과정 통합)
+  // ============================================================
+  const problemContext = generateProblemContext(grade, topic, theta, recentSuccessRate);
+
+  // Flow 이론 기반 적응형 난이도 조정 (Csikszentmihalyi)
+  // 목표: 75% 정답률 = 몰입 최적 구간 (60-85% 범위)
+  const flowAdjustedTheta = theta + problemContext.flowZone.adjustmentFactor;
+  const targetB = calculateTargetDifficulty(flowAdjustedTheta, TARGET_SUCCESS_RATE);
 
   // IRT 파라미터 생성
   const irt = generateIRTParameters(targetB, grade);
