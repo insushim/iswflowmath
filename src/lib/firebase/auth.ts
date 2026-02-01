@@ -40,6 +40,8 @@ export async function signUp(
     theta: 0,
     streakDays: 0,
     lastPracticeDate: null,
+      diagnosticCompleted: false,
+      diagnosticResult: null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -74,6 +76,8 @@ export async function signInWithGoogle(): Promise<User> {
       theta: 0,
       streakDays: 0,
       lastPracticeDate: null,
+      diagnosticCompleted: false,
+      diagnosticResult: null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });

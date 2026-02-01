@@ -256,6 +256,60 @@ body {
 .dark .glass-card {
   background: rgba(30, 41, 59, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* ================================================================
+   대시보드 다크 테마 (slate-950 배경에서 자동 적용)
+   ================================================================ */
+.min-h-screen.bg-gradient-to-br .glass-card,
+[class*="from-slate-950"] .glass-card {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  border-radius: 1rem;
+}
+
+[class*="from-slate-950"] .glass,
+.min-h-screen.bg-gradient-to-br .glass {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+[class*="from-slate-950"] .glass-subtle,
+.min-h-screen.bg-gradient-to-br .glass-subtle {
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* 대시보드 progress-modern 다크 스타일 */
+[class*="from-slate-950"] .progress-modern,
+.min-h-screen.bg-gradient-to-br .progress-modern {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+[class*="from-slate-950"] .progress-modern-bar,
+.min-h-screen.bg-gradient-to-br .progress-modern-bar {
+  background: linear-gradient(90deg, #6366f1, #8b5cf6);
+}
+
+/* 대시보드 버튼 다크 스타일 */
+[class*="from-slate-950"] .btn-primary,
+.min-h-screen.bg-gradient-to-br .btn-primary {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+}
+
+[class*="from-slate-950"] .btn-secondary,
+.min-h-screen.bg-gradient-to-br .btn-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+}
+
+[class*="from-slate-950"] .btn-secondary:hover,
+.min-h-screen.bg-gradient-to-br .btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(99, 102, 241, 0.3);
 }
 
 /* ================================================================

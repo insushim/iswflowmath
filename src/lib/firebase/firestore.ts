@@ -378,22 +378,31 @@ export async function saveDiagnosticResult(
 }
 
 export async function getDiagnosticResult(userId: string) {
-  const userRef = doc(db, 'users', userId);
-  const userDoc = await getDoc(userRef);
+  try {
+    const userRef = doc(db, 'users', userId);
+    const userDoc = await getDoc(userRef);
 
-  if (userDoc.exists()) {
-    const data = userDoc.data();
-    if (data.diagnosticCompleted && data.diagnosticResult) {
-      return {
-        completed: true,
-        result: data.diagnosticResult,
-        estimatedLevel: data.estimatedLevel,
-        theta: data.theta,
-        grade: data.grade,
-      };
+    if (userDoc.exists()) {
+      const data = userDoc.data();
+      // diagnosticCompleted가 true이거나, diagnosticResult가 존재하면 완료된 것으로 처리
+      const isCompleted = data.diagnosticCompleted === true ||
+        (data.diagnosticResult && typeof data.diagnosticResult === 'object');
+
+      if (isCompleted && (data.diagnosticResult || data.estimatedLevel)) {
+        return {
+          completed: true,
+          result: data.diagnosticResult || null,
+          estimatedLevel: data.estimatedLevel || data.diagnosticResult?.estimatedLevel || 1,
+          theta: data.theta ?? data.diagnosticResult?.theta ?? 0,
+          grade: data.grade || data.diagnosticResult?.grade || 7,
+        };
+      }
     }
+    return { completed: false, result: null };
+  } catch (error) {
+    console.error('Error getting diagnostic result:', error);
+    return { completed: false, result: null };
   }
-  return { completed: false, result: null };
 }
 
 export async function resetDiagnostic(userId: string) {
