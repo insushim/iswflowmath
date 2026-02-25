@@ -1,23 +1,10 @@
 // ============================================================
-// MathFlow - Firestore Database Operations
+// 셈마루(SemMaru) - Firestore → D1 API 래퍼
+// Firestore 직접 접근을 API 호출로 교체
 // ============================================================
 
-import {
-  collection,
-  doc,
-  addDoc,
-  getDoc,
-  getDocs,
-  updateDoc,
-  query,
-  where,
-  orderBy,
-  limit,
-  serverTimestamp,
-  Timestamp,
-} from 'firebase/firestore';
-import { db } from './config';
-import { MathTopic, FlowChannel } from '@/types';
+import { api } from "@/lib/api/client";
+import { MathTopic } from "@/types";
 
 // ============================================================
 // Practice Sessions
@@ -26,8 +13,8 @@ import { MathTopic, FlowChannel } from '@/types';
 export interface FirestoreSession {
   userId: string;
   topic: MathTopic;
-  startedAt: Timestamp;
-  endedAt?: Timestamp;
+  startedAt: any;
+  endedAt?: any;
   problemsAttempted: number;
   problemsCorrect: number;
   initialTheta: number;
@@ -38,28 +25,17 @@ export interface FirestoreSession {
 export async function createSession(
   userId: string,
   topic: MathTopic,
-  initialTheta: number
+  initialTheta: number,
 ): Promise<string> {
-  const docRef = await addDoc(collection(db, 'sessions'), {
-    userId,
-    topic,
-    startedAt: serverTimestamp(),
-    problemsAttempted: 0,
-    problemsCorrect: 0,
-    initialTheta,
-    xpEarned: 0,
-  });
-  return docRef.id;
+  const result = await api.createSession({ topic, initialTheta });
+  return result.id;
 }
 
 export async function updateSession(
   sessionId: string,
-  data: Partial<FirestoreSession>
+  data: Partial<FirestoreSession>,
 ) {
-  await updateDoc(doc(db, 'sessions', sessionId), {
-    ...data,
-    updatedAt: serverTimestamp(),
-  });
+  await api.updateSession(sessionId, data);
 }
 
 export async function endSession(
@@ -67,41 +43,44 @@ export async function endSession(
   finalTheta: number,
   problemsAttempted: number,
   problemsCorrect: number,
-  xpEarned: number
+  xpEarned: number,
 ) {
-  await updateDoc(doc(db, 'sessions', sessionId), {
-    endedAt: serverTimestamp(),
+  await api.updateSession(sessionId, {
+    ended: true,
     finalTheta,
-    problemsAttempted,
-    problemsCorrect,
-    xpEarned,
+    problems_attempted: problemsAttempted,
+    problems_correct: problemsCorrect,
+    xp_earned: xpEarned,
   });
 }
 
 export async function getUserSessions(userId: string, limitCount = 10) {
-  try {
-    const q = query(
-      collection(db, 'sessions'),
-      where('userId', '==', userId),
-      orderBy('startedAt', 'desc'),
-      limit(limitCount)
-    );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-  } catch (error) {
-    console.warn('Firestore index error, using fallback:', error);
-    try {
-      const q = query(collection(db, 'sessions'), where('userId', '==', userId));
-      const snapshot = await getDocs(q);
-      return snapshot.docs
-        .map((d) => ({ id: d.id, ...d.data() } as any))
-        .sort((a, b) => (b.startedAt?.toMillis?.() || 0) - (a.startedAt?.toMillis?.() || 0))
-        .slice(0, limitCount);
-    } catch (fallbackError) {
-      console.error('Fallback also failed:', fallbackError);
-      return []; // 빈 배열 반환
-    }
-  }
+  const result = await api.getSessions(limitCount);
+  return (result.sessions || []).map((s: any) => ({
+    id: s.id,
+    userId: s.user_id,
+    topic: s.topic,
+    startedAt: s.started_at
+      ? {
+          toDate: () => new Date(s.started_at),
+          toMillis: () => new Date(s.started_at).getTime(),
+          seconds: Math.floor(new Date(s.started_at).getTime() / 1000),
+        }
+      : null,
+    endedAt: s.ended_at
+      ? {
+          toDate: () => new Date(s.ended_at),
+          toMillis: () => new Date(s.ended_at).getTime(),
+          seconds: Math.floor(new Date(s.ended_at).getTime() / 1000),
+        }
+      : null,
+    problemsAttempted: s.problems_attempted,
+    problemsCorrect: s.problems_correct,
+    initialTheta: s.initial_theta,
+    finalTheta: s.final_theta,
+    xpEarned: s.xp_earned,
+    flowPercentage: s.flow_percentage,
+  }));
 }
 
 // ============================================================
@@ -120,26 +99,32 @@ export interface FirestoreAttempt {
   hintsUsed: number;
   thetaBefore: number;
   thetaAfter: number;
-  flowState: FlowChannel;
-  createdAt: Timestamp;
+  flowState: string;
+  createdAt: any;
 }
 
-export async function saveAttempt(attempt: Omit<FirestoreAttempt, 'createdAt'>) {
-  const docRef = await addDoc(collection(db, 'attempts'), {
-    ...attempt,
-    createdAt: serverTimestamp(),
+export async function saveAttempt(
+  attempt: Omit<FirestoreAttempt, "createdAt">,
+) {
+  const result = await api.saveAttempt({
+    sessionId: attempt.sessionId,
+    problemContent: attempt.problemContent,
+    problemIrt: attempt.problemIrt,
+    userAnswer: attempt.userAnswer,
+    correctAnswer: attempt.correctAnswer,
+    isCorrect: attempt.isCorrect,
+    timeSpentMs: attempt.timeSpentMs,
+    hintsUsed: attempt.hintsUsed,
+    thetaBefore: attempt.thetaBefore,
+    thetaAfter: attempt.thetaAfter,
+    flowState: attempt.flowState,
   });
-  return docRef.id;
+  return result.id;
 }
 
 export async function getSessionAttempts(sessionId: string) {
-  const q = query(
-    collection(db, 'attempts'),
-    where('sessionId', '==', sessionId),
-    orderBy('createdAt', 'asc')
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const result = await api.getAttempts(sessionId);
+  return result.attempts || [];
 }
 
 // ============================================================
@@ -150,69 +135,18 @@ export async function updateUserStats(
   userId: string,
   xpEarned: number,
   problemsCorrect: number,
-  problemsAttempted: number
+  problemsAttempted: number,
 ) {
-  const userRef = doc(db, 'users', userId);
-  const userDoc = await getDoc(userRef);
-
-  if (userDoc.exists()) {
-    const data = userDoc.data();
-    const newTotalXp = (data.totalXp || 0) + xpEarned;
-    const newLevel = Math.floor(newTotalXp / 100) + 1;
-
-    await updateDoc(userRef, {
-      totalXp: newTotalXp,
-      currentLevel: newLevel,
-      updatedAt: serverTimestamp(),
-    });
-  }
+  await api.awardXp({ amount: xpEarned, source: "user_stats" });
 }
 
 export async function updateUserTheta(userId: string, newTheta: number) {
-  await updateDoc(doc(db, 'users', userId), {
-    theta: newTheta,
-    updatedAt: serverTimestamp(),
-  });
+  await api.updateUser({ theta: newTheta });
 }
 
 export async function updateStreak(userId: string) {
-  const userRef = doc(db, 'users', userId);
-  const userDoc = await getDoc(userRef);
-
-  if (userDoc.exists()) {
-    const data = userDoc.data();
-    const lastPractice = data.lastPracticeDate?.toDate();
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    let newStreak = data.streakDays || 0;
-
-    if (lastPractice) {
-      const lastDate = new Date(lastPractice);
-      lastDate.setHours(0, 0, 0, 0);
-      const diffDays = Math.floor(
-        (today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24)
-      );
-
-      if (diffDays === 1) {
-        newStreak += 1;
-      } else if (diffDays > 1) {
-        newStreak = 1;
-      }
-      // diffDays === 0 means same day, don't change streak
-    } else {
-      newStreak = 1;
-    }
-
-    await updateDoc(userRef, {
-      streakDays: newStreak,
-      lastPracticeDate: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-
-    return newStreak;
-  }
-  return 0;
+  const result = await api.recordActivity();
+  return result.streakData?.currentStreak || 0;
 }
 
 // ============================================================
@@ -220,47 +154,28 @@ export async function updateStreak(userId: string) {
 // ============================================================
 
 export async function unlockAchievement(userId: string, achievementId: string) {
-  // Check if already unlocked
-  const q = query(
-    collection(db, 'achievements'),
-    where('userId', '==', userId),
-    where('achievementId', '==', achievementId)
-  );
-  const snapshot = await getDocs(q);
-
-  if (snapshot.empty) {
-    await addDoc(collection(db, 'achievements'), {
-      userId,
-      achievementId,
-      unlockedAt: serverTimestamp(),
-    });
+  try {
+    await api.unlockAchievement(achievementId);
     return true;
+  } catch {
+    return false;
   }
-  return false;
 }
 
 export async function getUserAchievements(userId: string) {
-  try {
-    const q = query(
-      collection(db, 'achievements'),
-      where('userId', '==', userId),
-      orderBy('unlockedAt', 'desc')
-    );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-  } catch (error) {
-    console.warn('Firestore index error, using fallback:', error);
-    try {
-      const q = query(collection(db, 'achievements'), where('userId', '==', userId));
-      const snapshot = await getDocs(q);
-      return snapshot.docs
-        .map((d) => ({ id: d.id, ...d.data() } as any))
-        .sort((a, b) => (b.unlockedAt?.toMillis?.() || 0) - (a.unlockedAt?.toMillis?.() || 0));
-    } catch (fallbackError) {
-      console.error('Fallback also failed:', fallbackError);
-      return [];
-    }
-  }
+  const result = await api.getAchievements();
+  return (result.achievements || []).map((a: any) => ({
+    id: a.id,
+    userId: a.user_id,
+    achievementId: a.achievement_id,
+    unlockedAt: a.unlocked_at
+      ? {
+          toDate: () => new Date(a.unlocked_at),
+          toMillis: () => new Date(a.unlocked_at).getTime(),
+          seconds: Math.floor(new Date(a.unlocked_at).getTime() / 1000),
+        }
+      : null,
+  }));
 }
 
 // ============================================================
@@ -273,163 +188,95 @@ export async function updateDailyStats(
   problemsCorrect: number,
   xpEarned: number,
   timeSpentMinutes: number,
-  topic: MathTopic
+  topic: MathTopic,
 ) {
-  const today = new Date().toISOString().split('T')[0];
-  const statsId = `${userId}_${today}`;
-  const statsRef = doc(db, 'dailyStats', statsId);
-  const statsDoc = await getDoc(statsRef);
-
-  if (statsDoc.exists()) {
-    const data = statsDoc.data();
-    const topics = data.topicsPracticed || [];
-    if (!topics.includes(topic)) {
-      topics.push(topic);
-    }
-
-    await updateDoc(statsRef, {
-      problemsSolved: (data.problemsSolved || 0) + problemsSolved,
-      problemsCorrect: (data.problemsCorrect || 0) + problemsCorrect,
-      xpEarned: (data.xpEarned || 0) + xpEarned,
-      timeSpentMinutes: (data.timeSpentMinutes || 0) + timeSpentMinutes,
-      topicsPracticed: topics,
-      updatedAt: serverTimestamp(),
-    });
-  } else {
-    await addDoc(collection(db, 'dailyStats'), {
-      id: statsId,
-      userId,
-      date: today,
-      problemsSolved,
-      problemsCorrect,
-      xpEarned,
-      timeSpentMinutes,
-      topicsPracticed: [topic],
-      createdAt: serverTimestamp(),
-    });
-  }
+  await api.updateDailyStats({
+    problemsSolved,
+    problemsCorrect,
+    xpEarned,
+    timeSpentMinutes,
+    topic,
+  });
 }
 
 export async function getUserDailyStats(userId: string, days = 7) {
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - days);
-  const startDateStr = startDate.toISOString().split('T')[0];
-
-  try {
-    // 복합 인덱스가 필요한 쿼리 - 인덱스 없으면 폴백
-    const q = query(
-      collection(db, 'dailyStats'),
-      where('userId', '==', userId),
-      where('date', '>=', startDateStr),
-      orderBy('date', 'desc')
-    );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-  } catch (error) {
-    console.warn('Firestore index error, using fallback:', error);
-    try {
-      // 폴백: userId만으로 필터링 후 클라이언트에서 처리
-      const q = query(collection(db, 'dailyStats'), where('userId', '==', userId));
-      const snapshot = await getDocs(q);
-      return snapshot.docs
-        .map((d) => ({ id: d.id, ...d.data() } as any))
-        .filter((d) => d.date && d.date >= startDateStr)
-        .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-    } catch (fallbackError) {
-      console.error('Fallback also failed:', fallbackError);
-      return []; // 빈 배열 반환으로 무한 로딩 방지
-    }
-  }
+  const result = await api.getDailyStats(days);
+  return (result.stats || []).map((d: any) => ({
+    id: d.id,
+    userId: d.user_id,
+    date: d.date,
+    problemsSolved: d.problems_solved,
+    problemsCorrect: d.problems_correct,
+    xpEarned: d.xp_earned,
+    timeSpentMinutes: d.time_spent_minutes,
+    topicsPracticed:
+      typeof d.topics_practiced === "string"
+        ? JSON.parse(d.topics_practiced)
+        : d.topics_practiced || [],
+    flowPercentage: d.flow_percentage,
+  }));
 }
 
 // ============================================================
-// Diagnostic Results (진단 결과 저장)
+// Diagnostic Results
 // ============================================================
 
 export interface DiagnosticResult {
   userId: string;
-  estimatedLevel: number; // 추정 학년 (1-12)
-  theta: number; // IRT 능력 파라미터
-  grade: number; // 선택한 학년
+  estimatedLevel: number;
+  theta: number;
+  grade: number;
   strengths: string[];
   weaknesses: string[];
   answers: { problemId: string; correct: boolean; topic: string }[];
-  completedAt: Timestamp;
+  completedAt: any;
 }
 
 export async function saveDiagnosticResult(
   userId: string,
-  result: Omit<DiagnosticResult, 'userId' | 'completedAt'>
+  result: Omit<DiagnosticResult, "userId" | "completedAt">,
 ) {
-  // 기존 진단 결과가 있으면 업데이트, 없으면 생성
-  const userRef = doc(db, 'users', userId);
-
-  await updateDoc(userRef, {
-    diagnosticCompleted: true,
-    diagnosticResult: {
-      ...result,
-      completedAt: serverTimestamp(),
-    },
-    estimatedLevel: result.estimatedLevel,
-    theta: result.theta,
-    grade: result.grade,
-    updatedAt: serverTimestamp(),
-  });
+  await api.saveDiagnostic(result);
 }
 
 export async function getDiagnosticResult(userId: string) {
   try {
-    const userRef = doc(db, 'users', userId);
-    const userDoc = await getDoc(userRef);
-
-    if (userDoc.exists()) {
-      const data = userDoc.data();
-      // diagnosticCompleted가 true이거나, diagnosticResult가 존재하면 완료된 것으로 처리
-      const isCompleted = data.diagnosticCompleted === true ||
-        (data.diagnosticResult && typeof data.diagnosticResult === 'object');
-
-      if (isCompleted && (data.diagnosticResult || data.estimatedLevel)) {
-        return {
-          completed: true,
-          result: data.diagnosticResult || null,
-          estimatedLevel: data.estimatedLevel || data.diagnosticResult?.estimatedLevel || 1,
-          theta: data.theta ?? data.diagnosticResult?.theta ?? 0,
-          grade: data.grade || data.diagnosticResult?.grade || 7,
-        };
-      }
+    const result = await api.getDiagnostic();
+    if (result.completed) {
+      return {
+        completed: true,
+        result: result.result,
+        estimatedLevel: result.estimatedLevel,
+        theta: result.theta,
+        grade: result.grade,
+      };
     }
     return { completed: false, result: null };
-  } catch (error) {
-    console.error('Error getting diagnostic result:', error);
+  } catch {
     return { completed: false, result: null };
   }
 }
 
 export async function resetDiagnostic(userId: string) {
-  const userRef = doc(db, 'users', userId);
-  await updateDoc(userRef, {
-    diagnosticCompleted: false,
-    diagnosticResult: null,
-    updatedAt: serverTimestamp(),
-  });
+  await api.resetDiagnostic();
 }
 
 // ============================================================
-// Immersion Problems (몰입 문제 저장)
+// Immersion Problems
 // ============================================================
 
 export interface ImmersionProblem {
   id?: string;
   userId: string;
-  difficulty: '5min' | '10min' | '30min' | '1hour' | '1day' | '3days' | '7days' | '1month';
+  difficulty: string;
   topic: string;
   content: string;
   hints: string[];
   solution: string;
-  status: 'assigned' | 'in_progress' | 'completed' | 'skipped';
-  assignedAt: Timestamp;
-  startedAt?: Timestamp;
-  completedAt?: Timestamp;
+  status: "assigned" | "in_progress" | "completed" | "skipped";
+  assignedAt: any;
+  startedAt?: any;
+  completedAt?: any;
   userAnswer?: string;
   isCorrect?: boolean;
   timeSpentMinutes?: number;
@@ -437,55 +284,51 @@ export interface ImmersionProblem {
 
 export async function assignImmersionProblem(
   userId: string,
-  difficulty: ImmersionProblem['difficulty'],
-  problem: { topic: string; content: string; hints: string[]; solution: string }
+  difficulty: ImmersionProblem["difficulty"],
+  problem: {
+    topic: string;
+    content: string;
+    hints: string[];
+    solution: string;
+  },
 ) {
-  const docRef = await addDoc(collection(db, 'immersionProblems'), {
-    userId,
+  const result = await api.assignImmersionProblem({
     difficulty,
     ...problem,
-    status: 'assigned',
-    assignedAt: serverTimestamp(),
   });
-  return docRef.id;
+  return result.id;
 }
 
-export async function getActiveImmersionProblem(userId: string, difficulty: string) {
-  const q = query(
-    collection(db, 'immersionProblems'),
-    where('userId', '==', userId),
-    where('difficulty', '==', difficulty),
-    where('status', 'in', ['assigned', 'in_progress']),
-    orderBy('assignedAt', 'desc'),
-    limit(1)
-  );
-  const snapshot = await getDocs(q);
-  if (!snapshot.empty) {
-    const doc = snapshot.docs[0];
-    return { id: doc.id, ...doc.data() } as ImmersionProblem;
+export async function getActiveImmersionProblem(
+  userId: string,
+  difficulty: string,
+) {
+  try {
+    const result = await api.getActiveImmersionProblem(difficulty);
+    if (result.problem) {
+      return result.problem as ImmersionProblem;
+    }
+    return null;
+  } catch {
+    return null;
   }
-  return null;
 }
 
 export async function updateImmersionProblem(
   problemId: string,
-  data: Partial<ImmersionProblem>
+  data: Partial<ImmersionProblem>,
 ) {
-  await updateDoc(doc(db, 'immersionProblems', problemId), {
-    ...data,
-    updatedAt: serverTimestamp(),
-  });
+  await api.updateImmersionProblem(problemId, data);
 }
 
 export async function completeImmersionProblem(
   problemId: string,
   userAnswer: string,
   isCorrect: boolean,
-  timeSpentMinutes: number
+  timeSpentMinutes: number,
 ) {
-  await updateDoc(doc(db, 'immersionProblems', problemId), {
-    status: 'completed',
-    completedAt: serverTimestamp(),
+  await api.updateImmersionProblem(problemId, {
+    status: "completed",
     userAnswer,
     isCorrect,
     timeSpentMinutes,

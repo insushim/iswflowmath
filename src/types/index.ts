@@ -1,5 +1,5 @@
 // ============================================================
-// MathFlow - Type Definitions
+// 셈마루(SemMaru) - Type Definitions
 // IRT 3PL Model + 8-Channel Flow Theory
 // ============================================================
 
@@ -15,7 +15,7 @@ export interface User {
   updated_at: string;
 }
 
-export type SubscriptionTier = 'free' | 'pro' | 'premium';
+export type SubscriptionTier = "free" | "pro" | "premium";
 
 export interface UserProfile extends User {
   total_xp: number;
@@ -50,60 +50,63 @@ export interface ProblemWithIRT {
 
 // Math Topics
 export type MathTopic =
-  | 'arithmetic'      // 사칙연산
-  | 'fractions'       // 분수
-  | 'decimals'        // 소수
-  | 'geometry'        // 기하학
-  | 'algebra'         // 대수
-  | 'functions'       // 함수
-  | 'statistics'      // 통계
-  | 'probability'     // 확률
-  | 'calculus'        // 미적분
-  | 'vectors'         // 벡터
-  | 'sequences';      // 수열
+  | "arithmetic" // 사칙연산
+  | "fractions" // 분수
+  | "decimals" // 소수
+  | "geometry" // 기하학
+  | "algebra" // 대수
+  | "functions" // 함수
+  | "statistics" // 통계
+  | "probability" // 확률
+  | "calculus" // 미적분
+  | "vectors" // 벡터
+  | "sequences"; // 수열
 
 export const MATH_TOPICS: Record<MathTopic, string> = {
-  arithmetic: '사칙연산',
-  fractions: '분수',
-  decimals: '소수',
-  geometry: '기하학',
-  algebra: '대수',
-  functions: '함수',
-  statistics: '통계',
-  probability: '확률',
-  calculus: '미적분',
-  vectors: '벡터',
-  sequences: '수열',
+  arithmetic: "사칙연산",
+  fractions: "분수",
+  decimals: "소수",
+  geometry: "기하학",
+  algebra: "대수",
+  functions: "함수",
+  statistics: "통계",
+  probability: "확률",
+  calculus: "미적분",
+  vectors: "벡터",
+  sequences: "수열",
 };
 
 // Flow State (8-Channel Model)
 export type FlowChannel =
-  | 'anxiety'     // 불안 (높은 도전, 낮은 능력)
-  | 'arousal'     // 각성 (높은 도전, 중간 능력)
-  | 'flow'        // 몰입 (높은 도전, 높은 능력)
-  | 'control'     // 통제 (중간 도전, 높은 능력)
-  | 'relaxation'  // 이완 (낮은 도전, 높은 능력)
-  | 'boredom'     // 지루함 (낮은 도전, 중간 능력)
-  | 'apathy'      // 무관심 (낮은 도전, 낮은 능력)
-  | 'worry';      // 걱정 (중간 도전, 낮은 능력)
+  | "anxiety" // 불안 (높은 도전, 낮은 능력)
+  | "arousal" // 각성 (높은 도전, 중간 능력)
+  | "flow" // 몰입 (높은 도전, 높은 능력)
+  | "control" // 통제 (중간 도전, 높은 능력)
+  | "relaxation" // 이완 (낮은 도전, 높은 능력)
+  | "boredom" // 지루함 (낮은 도전, 중간 능력)
+  | "apathy" // 무관심 (낮은 도전, 낮은 능력)
+  | "worry"; // 걱정 (중간 도전, 낮은 능력)
 
 export interface FlowState {
   channel: FlowChannel;
   challenge_level: number; // 0-100
-  skill_level: number;     // 0-100
+  skill_level: number; // 0-100
   engagement_score: number; // 0-100
   timestamp: string;
 }
 
-export const FLOW_CHANNELS: Record<FlowChannel, { label: string; color: string; emoji: string }> = {
-  anxiety: { label: '불안', color: '#EF4444', emoji: '😰' },
-  arousal: { label: '각성', color: '#F97316', emoji: '🔥' },
-  flow: { label: '몰입', color: '#22C55E', emoji: '🎯' },
-  control: { label: '통제', color: '#3B82F6', emoji: '💪' },
-  relaxation: { label: '이완', color: '#8B5CF6', emoji: '😌' },
-  boredom: { label: '지루함', color: '#6B7280', emoji: '😐' },
-  apathy: { label: '무관심', color: '#9CA3AF', emoji: '😶' },
-  worry: { label: '걱정', color: '#EAB308', emoji: '😟' },
+export const FLOW_CHANNELS: Record<
+  FlowChannel,
+  { label: string; color: string; emoji: string }
+> = {
+  anxiety: { label: "불안", color: "#EF4444", emoji: "😰" },
+  arousal: { label: "각성", color: "#F97316", emoji: "🔥" },
+  flow: { label: "몰입", color: "#22C55E", emoji: "🎯" },
+  control: { label: "통제", color: "#3B82F6", emoji: "💪" },
+  relaxation: { label: "이완", color: "#8B5CF6", emoji: "😌" },
+  boredom: { label: "지루함", color: "#6B7280", emoji: "😐" },
+  apathy: { label: "무관심", color: "#9CA3AF", emoji: "😶" },
+  worry: { label: "걱정", color: "#EAB308", emoji: "😟" },
 };
 
 // Practice Session
@@ -171,12 +174,12 @@ export interface Achievement {
 }
 
 export type AchievementCategory =
-  | 'problems'   // 문제 풀이
-  | 'streak'     // 연속 학습
-  | 'accuracy'   // 정확도
-  | 'flow'       // 몰입 시간
-  | 'speed'      // 속도
-  | 'mastery';   // 주제 마스터
+  | "problems" // 문제 풀이
+  | "streak" // 연속 학습
+  | "accuracy" // 정확도
+  | "flow" // 몰입 시간
+  | "speed" // 속도
+  | "mastery"; // 주제 마스터
 
 // Leaderboard
 export interface LeaderboardEntry {
@@ -249,15 +252,11 @@ export interface SubscriptionPlan {
 
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
-    id: 'free',
-    name: '무료',
+    id: "free",
+    name: "무료",
     price_monthly: 0,
     price_yearly: 0,
-    features: [
-      '하루 10문제',
-      '기본 통계',
-      '힌트 1개/문제',
-    ],
+    features: ["하루 10문제", "기본 통계", "힌트 1개/문제"],
     limits: {
       problems_per_day: 10,
       hints_per_problem: 1,
@@ -266,16 +265,11 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     },
   },
   {
-    id: 'pro',
-    name: '프로',
+    id: "pro",
+    name: "프로",
     price_monthly: 9900,
     price_yearly: 99000,
-    features: [
-      '하루 50문제',
-      '30일 통계',
-      '힌트 3개/문제',
-      'AI 풀이 설명',
-    ],
+    features: ["하루 50문제", "30일 통계", "힌트 3개/문제", "AI 풀이 설명"],
     limits: {
       problems_per_day: 50,
       hints_per_problem: 3,
@@ -284,17 +278,17 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     },
   },
   {
-    id: 'premium',
-    name: '프리미엄',
+    id: "premium",
+    name: "프리미엄",
     price_monthly: 19900,
     price_yearly: 199000,
     features: [
-      '무제한 문제',
-      '전체 통계',
-      '무제한 힌트',
-      'AI 풀이 설명',
-      '1:1 AI 튜터',
-      '부모 리포트',
+      "무제한 문제",
+      "전체 통계",
+      "무제한 힌트",
+      "AI 풀이 설명",
+      "1:1 AI 튜터",
+      "부모 리포트",
     ],
     limits: {
       problems_per_day: Infinity,

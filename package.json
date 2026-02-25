@@ -1,12 +1,17 @@
 {
-  "name": "mathflow",
+  "name": "semmaru",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "build:cf": "npx @opennextjs/cloudflare build",
+    "preview": "npx wrangler pages dev",
+    "deploy": "npx wrangler pages deploy",
+    "d1:migrate": "npx wrangler d1 execute semmaru-db --file=./migrations/0001_initial_schema.sql",
+    "d1:migrate:local": "npx wrangler d1 execute semmaru-db --local --file=./migrations/0001_initial_schema.sql"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -26,15 +31,12 @@
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@stripe/stripe-js": "^8.6.3",
-    "@supabase/ssr": "^0.8.0",
-    "@supabase/supabase-js": "^2.90.1",
     "@tanstack/react-query": "^5.90.19",
     "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "firebase": "^12.8.0",
-    "firebase-admin": "^13.6.0",
     "framer-motion": "^12.27.1",
     "katex": "^0.16.27",
     "lucide-react": "^0.562.0",
@@ -51,6 +53,7 @@
     "zustand": "^5.0.10"
   },
   "devDependencies": {
+    "@opennextjs/cloudflare": "^1.17.1",
     "@tailwindcss/postcss": "^4",
     "@types/canvas-confetti": "^1.9.0",
     "@types/katex": "^0.16.8",
@@ -62,6 +65,7 @@
     "eslint-config-next": "16.1.4",
     "tailwindcss": "^4",
     "tailwindcss-animate": "^1.0.7",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^4.68.1"
   }
 }

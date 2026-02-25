@@ -42,11 +42,11 @@ export default function FindPasswordPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <Link href="/" className="flex items-center justify-center gap-2 mb-4">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-              <span className="text-white font-bold text-xl">M</span>
+            <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-xl flex items-center justify-center">
+              <svg width="24" height="24" viewBox="0 0 32 32" fill="none"><path d="M16 4L6 14L16 12L26 14L16 4Z" fill="white" opacity="0.9" /><path d="M16 12L6 14L10 26H22L26 14L16 12Z" fill="white" opacity="0.7" /><text x="16" y="22" textAnchor="middle" fill="white" fontSize="9" fontWeight="bold" fontFamily="serif">&sum;</text></svg>
             </div>
-            <span className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              MathFlow
+            <span className="font-bold text-xl bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
+              셈마루
             </span>
           </Link>
           <CardTitle className="text-2xl">비밀번호 찾기</CardTitle>

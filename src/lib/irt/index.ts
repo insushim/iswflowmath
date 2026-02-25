@@ -1,13 +1,13 @@
 // ============================================================
-// MathFlow - IRT (Item Response Theory) 3PL Model
+// 셈마루(SemMaru) - IRT (Item Response Theory) 3PL Model
 // ============================================================
 // P(θ) = c + (1-c) / (1 + e^(-a(θ-b)))
 // θ: ability, a: discrimination, b: difficulty, c: guessing
 // ============================================================
 
-import { IRTParameters, ProblemWithIRT } from '@/types';
-import { IRT_CONSTANTS } from '@/constants';
-import { clamp } from '@/lib/utils';
+import { IRTParameters, ProblemWithIRT } from "@/types";
+import { IRT_CONSTANTS } from "@/constants";
+import { clamp } from "@/lib/utils";
 
 /**
  * Calculate the probability of correct answer using 3PL IRT model
@@ -15,7 +15,10 @@ import { clamp } from '@/lib/utils';
  * @param params - IRT parameters { a, b, c }
  * @returns Probability of correct answer (0 to 1)
  */
-export function calculateProbability(theta: number, params: IRTParameters): number {
+export function calculateProbability(
+  theta: number,
+  params: IRTParameters,
+): number {
   const { a, b, c } = params;
   const exponent = -a * (theta - b);
   return c + (1 - c) / (1 + Math.exp(exponent));
@@ -27,7 +30,10 @@ export function calculateProbability(theta: number, params: IRTParameters): numb
  * @param params - IRT parameters
  * @returns Information value
  */
-export function calculateInformation(theta: number, params: IRTParameters): number {
+export function calculateInformation(
+  theta: number,
+  params: IRTParameters,
+): number {
   const { a, b, c } = params;
   const p = calculateProbability(theta, params);
   const q = 1 - p;
@@ -52,7 +58,7 @@ export function calculateInformation(theta: number, params: IRTParameters): numb
 export function updateTheta(
   currentTheta: number,
   params: IRTParameters,
-  isCorrect: boolean
+  isCorrect: boolean,
 ): number {
   const p = calculateProbability(currentTheta, params);
   const info = calculateInformation(currentTheta, params);
@@ -79,7 +85,7 @@ export function updateTheta(
  */
 export function calculateTargetDifficulty(
   theta: number,
-  targetProbability = 0.7
+  targetProbability = 0.7,
 ): number {
   // Assuming default a and c values
   const a = IRT_CONSTANTS.DEFAULT_DISCRIMINATION;
@@ -108,11 +114,9 @@ export function calculateTargetDifficulty(
 export function selectOptimalProblem(
   theta: number,
   problems: ProblemWithIRT[],
-  excludeIds: string[] = []
+  excludeIds: string[] = [],
 ): ProblemWithIRT | null {
-  const availableProblems = problems.filter(
-    (p) => !excludeIds.includes(p.id)
-  );
+  const availableProblems = problems.filter((p) => !excludeIds.includes(p.id));
 
   if (availableProblems.length === 0) return null;
 
@@ -137,11 +141,11 @@ export function selectOptimalProblem(
  */
 export function calculateSEM(
   theta: number,
-  answeredProblems: { irt: IRTParameters }[]
+  answeredProblems: { irt: IRTParameters }[],
 ): number {
   const totalInfo = answeredProblems.reduce(
     (sum, p) => sum + calculateInformation(theta, p.irt),
-    0
+    0,
   );
 
   return totalInfo > 0 ? 1 / Math.sqrt(totalInfo) : Infinity;
@@ -155,7 +159,7 @@ export function calculateSEM(
  */
 export function generateIRTParameters(
   targetDifficulty: number,
-  grade: number
+  grade: number,
 ): IRTParameters {
   // Higher grades tend to have higher discrimination problems
   const baseDiscrimination = 0.8 + (grade / 12) * 0.7;
@@ -164,20 +168,20 @@ export function generateIRTParameters(
   const a = clamp(
     baseDiscrimination + (Math.random() - 0.5) * 0.4,
     IRT_CONSTANTS.MIN_DISCRIMINATION,
-    IRT_CONSTANTS.MAX_DISCRIMINATION
+    IRT_CONSTANTS.MAX_DISCRIMINATION,
   );
 
   const b = clamp(
     targetDifficulty + (Math.random() - 0.5) * 0.3,
     IRT_CONSTANTS.MIN_THETA,
-    IRT_CONSTANTS.MAX_THETA
+    IRT_CONSTANTS.MAX_THETA,
   );
 
   // Lower guessing for higher grades
   const c = clamp(
     0.25 - (grade / 12) * 0.1 + (Math.random() - 0.5) * 0.05,
     IRT_CONSTANTS.MIN_GUESSING,
-    IRT_CONSTANTS.MAX_GUESSING
+    IRT_CONSTANTS.MAX_GUESSING,
   );
 
   return { a, b, c };
@@ -189,7 +193,7 @@ export function generateIRTParameters(
  * @returns Estimated initial theta
  */
 export function estimateInitialTheta(
-  results: { correct: boolean; difficulty: number }[]
+  results: { correct: boolean; difficulty: number }[],
 ): number {
   if (results.length === 0) return IRT_CONSTANTS.INITIAL_THETA;
 
@@ -204,12 +208,14 @@ export function estimateInitialTheta(
 
   const avgCorrect =
     correctDifficulties.length > 0
-      ? correctDifficulties.reduce((a, b) => a + b, 0) / correctDifficulties.length
+      ? correctDifficulties.reduce((a, b) => a + b, 0) /
+        correctDifficulties.length
       : 0;
 
   const avgIncorrect =
     incorrectDifficulties.length > 0
-      ? incorrectDifficulties.reduce((a, b) => a + b, 0) / incorrectDifficulties.length
+      ? incorrectDifficulties.reduce((a, b) => a + b, 0) /
+        incorrectDifficulties.length
       : 0;
 
   // Estimate theta as midpoint between avg correct and avg incorrect
@@ -224,12 +230,12 @@ export function estimateInitialTheta(
  * @returns Korean label
  */
 export function getDifficultyLabel(value: number): string {
-  if (value <= -2) return '매우 쉬움';
-  if (value <= -1) return '쉬움';
-  if (value <= 0) return '보통';
-  if (value <= 1) return '어려움';
-  if (value <= 2) return '매우 어려움';
-  return '최상급';
+  if (value <= -2) return "매우 쉬움";
+  if (value <= -1) return "쉬움";
+  if (value <= 0) return "보통";
+  if (value <= 1) return "어려움";
+  if (value <= 2) return "매우 어려움";
+  return "최상급";
 }
 
 /**
@@ -243,28 +249,26 @@ export function getAbilityDescription(theta: number): {
   description: string;
 } {
   // Convert theta to percentile (normal distribution)
-  const percentile = Math.round(
-    100 * (0.5 * (1 + erf(theta / Math.sqrt(2))))
-  );
+  const percentile = Math.round(100 * (0.5 * (1 + erf(theta / Math.sqrt(2)))));
 
   let level: string;
   let description: string;
 
   if (theta >= 2) {
-    level = '최상위';
-    description = '상위 2% 수준의 뛰어난 실력입니다.';
+    level = "최상위";
+    description = "상위 2% 수준의 뛰어난 실력입니다.";
   } else if (theta >= 1) {
-    level = '상위';
-    description = '평균 이상의 좋은 실력입니다.';
+    level = "상위";
+    description = "평균 이상의 좋은 실력입니다.";
   } else if (theta >= 0) {
-    level = '평균';
-    description = '꾸준히 성장하고 있습니다.';
+    level = "평균";
+    description = "꾸준히 성장하고 있습니다.";
   } else if (theta >= -1) {
-    level = '기초';
-    description = '기초를 다지는 단계입니다.';
+    level = "기초";
+    description = "기초를 다지는 단계입니다.";
   } else {
-    level = '입문';
-    description = '시작이 반입니다. 함께 성장해요!';
+    level = "입문";
+    description = "시작이 반입니다. 함께 성장해요!";
   }
 
   return { level, percentile, description };

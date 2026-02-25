@@ -1,0 +1,17 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "semmaru"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Pages 설정
+pages_build_output_dir = ".open-next"
+
+# D1 데이터베이스 바인딩
+[[d1_databases]]
+binding = "DB"
+database_name = "semmaru-db"
+database_id = "placeholder-replace-with-actual-id"
+
+# 환경변수 (민감하지 않은 것만)
+[vars]
+NEXT_PUBLIC_APP_URL = "https://semmaru.pages.dev"

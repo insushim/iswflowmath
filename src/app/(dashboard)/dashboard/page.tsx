@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { MATH_TOPICS, MathTopic } from '@/types';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase/config';
-import { doc, getDoc, collection, query, where, orderBy, limit, getDocs, Timestamp } from 'firebase/firestore';
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { MATH_TOPICS, MathTopic } from "@/types";
+import { onAuthStateChanged, User } from "firebase/auth";
+import { auth } from "@/lib/firebase/config";
+import { api } from "@/lib/api/client";
 import {
   Flame,
   Target,
@@ -19,7 +19,7 @@ import {
   Star,
   ChevronRight,
   Play,
-} from 'lucide-react';
+} from "lucide-react";
 
 interface UserData {
   name: string;
@@ -29,15 +29,15 @@ interface UserData {
   totalXp: number;
   theta: number;
   streakDays: number;
-  lastPracticeDate?: Timestamp;
-  createdAt: Timestamp;
+  lastPracticeDate?: string;
+  createdAt: string;
 }
 
 interface Session {
   id: string;
   topic: MathTopic;
-  startedAt: Timestamp;
-  endedAt?: Timestamp;
+  startedAt: { toDate: () => Date; seconds: number };
+  endedAt?: { toDate: () => Date; seconds: number };
   problemsAttempted: number;
   problemsCorrect: number;
   xpEarned: number;
@@ -46,7 +46,7 @@ interface Session {
 interface Achievement {
   id: string;
   achievementId: string;
-  unlockedAt: Timestamp;
+  unlockedAt: { toDate: () => Date; seconds: number };
 }
 
 interface DailyStats {
@@ -58,17 +58,60 @@ interface DailyStats {
   topicsPracticed: MathTopic[];
 }
 
-const ACHIEVEMENTS_MAP: Record<string, { name: string; icon: string; color: string }> = {
-  'first_step': { name: '첫 걸음', icon: '🎯', color: 'from-blue-500 to-cyan-500' },
-  'week_streak': { name: '일주일 마라톤', icon: '📅', color: 'from-orange-500 to-amber-500' },
-  'perfect_10': { name: '퍼펙트 10', icon: '💯', color: 'from-emerald-500 to-teal-500' },
-  'flow_master': { name: '몰입 마스터', icon: '🧘', color: 'from-purple-500 to-violet-500' },
-  'level_5': { name: '레벨 5 달성', icon: '⭐', color: 'from-yellow-500 to-orange-500' },
-  'level_10': { name: '레벨 10 달성', icon: '🌟', color: 'from-pink-500 to-rose-500' },
-  'algebra_beginner': { name: '대수 입문', icon: '➕', color: 'from-indigo-500 to-blue-500' },
-  'geometry_beginner': { name: '기하 입문', icon: '📐', color: 'from-cyan-500 to-blue-500' },
-  'problem_100': { name: '100문제 해결', icon: '🔥', color: 'from-red-500 to-orange-500' },
-  'problem_500': { name: '500문제 해결', icon: '🏆', color: 'from-amber-500 to-yellow-500' },
+const ACHIEVEMENTS_MAP: Record<
+  string,
+  { name: string; icon: string; color: string }
+> = {
+  first_step: {
+    name: "첫 걸음",
+    icon: "🎯",
+    color: "from-blue-500 to-cyan-500",
+  },
+  week_streak: {
+    name: "일주일 마라톤",
+    icon: "📅",
+    color: "from-orange-500 to-amber-500",
+  },
+  perfect_10: {
+    name: "퍼펙트 10",
+    icon: "💯",
+    color: "from-emerald-500 to-teal-500",
+  },
+  flow_master: {
+    name: "몰입 마스터",
+    icon: "🧘",
+    color: "from-purple-500 to-violet-500",
+  },
+  level_5: {
+    name: "레벨 5 달성",
+    icon: "⭐",
+    color: "from-yellow-500 to-orange-500",
+  },
+  level_10: {
+    name: "레벨 10 달성",
+    icon: "🌟",
+    color: "from-pink-500 to-rose-500",
+  },
+  algebra_beginner: {
+    name: "대수 입문",
+    icon: "➕",
+    color: "from-indigo-500 to-blue-500",
+  },
+  geometry_beginner: {
+    name: "기하 입문",
+    icon: "📐",
+    color: "from-cyan-500 to-blue-500",
+  },
+  problem_100: {
+    name: "100문제 해결",
+    icon: "🔥",
+    color: "from-red-500 to-orange-500",
+  },
+  problem_500: {
+    name: "500문제 해결",
+    icon: "🏆",
+    color: "from-amber-500 to-yellow-500",
+  },
 };
 
 export default function DashboardPage() {
@@ -93,79 +136,91 @@ export default function DashboardPage() {
 
   const loadUserData = async (userId: string) => {
     try {
-      const userDoc = await getDoc(doc(db, 'users', userId));
-      if (userDoc.exists()) {
-        setUserData(userDoc.data() as UserData);
+      // 사용자 정보 API 조회
+      const userResult = await api.getUser();
+      if (userResult?.user) {
+        const u = userResult.user;
+        setUserData({
+          name: u.name || "",
+          email: u.email || "",
+          grade: u.grade || 7,
+          currentLevel: u.current_level || 1,
+          totalXp: u.total_xp || 0,
+          theta: u.theta || 0,
+          streakDays: u.streak_days || 0,
+          lastPracticeDate: u.last_practice_date,
+          createdAt: u.created_at,
+        });
       }
 
-      const today = new Date().toISOString().split('T')[0];
-
-      const dailyStatsQuery = query(
-        collection(db, 'dailyStats'),
-        where('userId', '==', userId),
-        where('date', '==', today),
-        limit(1)
+      // 오늘 일별 통계 API 조회
+      const today = new Date().toISOString().split("T")[0];
+      const dailyResult = await api.getDailyStats(1);
+      const todayData = (dailyResult.stats || []).find(
+        (d: any) => d.date === today,
       );
-      const dailyStatsSnapshot = await getDocs(dailyStatsQuery);
-      if (!dailyStatsSnapshot.empty) {
-        setTodayStats(dailyStatsSnapshot.docs[0].data() as DailyStats);
+      if (todayData) {
+        setTodayStats({
+          date: todayData.date,
+          problemsSolved: todayData.problems_solved || 0,
+          problemsCorrect: todayData.problems_correct || 0,
+          xpEarned: todayData.xp_earned || 0,
+          timeSpentMinutes: todayData.time_spent_minutes || 0,
+          topicsPracticed:
+            typeof todayData.topics_practiced === "string"
+              ? JSON.parse(todayData.topics_practiced)
+              : todayData.topics_practiced || [],
+        });
       }
 
-      try {
-        const sessionsQuery = query(
-          collection(db, 'sessions'),
-          where('userId', '==', userId),
-          orderBy('startedAt', 'desc'),
-          limit(5)
-        );
-        const sessionsSnapshot = await getDocs(sessionsQuery);
-        const sessions = sessionsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Session[];
-        setRecentSessions(sessions);
-      } catch {
-        const sessionsQuery = query(
-          collection(db, 'sessions'),
-          where('userId', '==', userId),
-          limit(10)
-        );
-        const sessionsSnapshot = await getDocs(sessionsQuery);
-        const sessions = sessionsSnapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() }) as Session)
-          .sort((a, b) => (b.startedAt?.seconds || 0) - (a.startedAt?.seconds || 0))
-          .slice(0, 5);
-        setRecentSessions(sessions);
-      }
+      // 최근 세션 API 조회
+      const sessionsResult = await api.getSessions(5);
+      const sessions: Session[] = (sessionsResult.sessions || []).map(
+        (s: any) => ({
+          id: s.id,
+          topic: s.topic,
+          startedAt: s.started_at
+            ? {
+                toDate: () => new Date(s.started_at),
+                seconds: Math.floor(new Date(s.started_at).getTime() / 1000),
+              }
+            : { toDate: () => new Date(), seconds: 0 },
+          endedAt: s.ended_at
+            ? {
+                toDate: () => new Date(s.ended_at),
+                seconds: Math.floor(new Date(s.ended_at).getTime() / 1000),
+              }
+            : undefined,
+          problemsAttempted: s.problems_attempted || 0,
+          problemsCorrect: s.problems_correct || 0,
+          xpEarned: s.xp_earned || 0,
+        }),
+      );
+      setRecentSessions(sessions);
 
-      try {
-        const achievementsQuery = query(
-          collection(db, 'achievements'),
-          where('userId', '==', userId),
-          orderBy('unlockedAt', 'desc'),
-          limit(5)
-        );
-        const achievementsSnapshot = await getDocs(achievementsQuery);
-        const achievementsList = achievementsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Achievement[];
-        setAchievements(achievementsList);
-      } catch {
-        const achievementsQuery = query(
-          collection(db, 'achievements'),
-          where('userId', '==', userId),
-          limit(10)
-        );
-        const achievementsSnapshot = await getDocs(achievementsQuery);
-        const achievementsList = achievementsSnapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() }) as Achievement)
-          .sort((a, b) => (b.unlockedAt?.seconds || 0) - (a.unlockedAt?.seconds || 0))
-          .slice(0, 5);
-        setAchievements(achievementsList);
-      }
+      // 업적 API 조회
+      const achievementsResult = await api.getAchievements();
+      const achievementsList: Achievement[] = (
+        achievementsResult.achievements || []
+      )
+        .map((a: any) => ({
+          id: a.id,
+          achievementId: a.achievement_id,
+          unlockedAt: a.unlocked_at
+            ? {
+                toDate: () => new Date(a.unlocked_at),
+                seconds: Math.floor(new Date(a.unlocked_at).getTime() / 1000),
+              }
+            : { toDate: () => new Date(), seconds: 0 },
+        }))
+        .sort(
+          (a: Achievement, b: Achievement) =>
+            b.unlockedAt.seconds - a.unlockedAt.seconds,
+        )
+        .slice(0, 5);
+      setAchievements(achievementsList);
     } catch (error) {
-      console.error('Error loading user data:', error);
+      console.error("Error loading user data:", error);
     }
   };
 
@@ -175,8 +230,11 @@ export default function DashboardPage() {
         <div className="space-y-6">
           <div className="h-8 w-64 bg-white/5 rounded-lg animate-pulse" />
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map(i => (
-              <div key={i} className="h-32 bg-white/5 rounded-2xl animate-pulse" />
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                className="h-32 bg-white/5 rounded-2xl animate-pulse"
+              />
             ))}
           </div>
           <div className="grid lg:grid-cols-3 gap-6">
@@ -188,7 +246,7 @@ export default function DashboardPage() {
     );
   }
 
-  const displayName = userData?.name || user?.displayName || '사용자';
+  const displayName = userData?.name || user?.displayName || "사용자";
   const level = userData?.currentLevel || 1;
   const totalXp = userData?.totalXp || 0;
   const xpProgress = totalXp % 100;
@@ -196,66 +254,94 @@ export default function DashboardPage() {
 
   const todayProblems = todayStats?.problemsSolved || 0;
   const todayCorrect = todayStats?.problemsCorrect || 0;
-  const todayAccuracy = todayProblems > 0 ? Math.round((todayCorrect / todayProblems) * 100) : 0;
+  const todayAccuracy =
+    todayProblems > 0 ? Math.round((todayCorrect / todayProblems) * 100) : 0;
   const todayFlowTime = todayStats?.timeSpentMinutes || 0;
   const todayLimit = 20;
 
-  const topicProgress = recentSessions.reduce((acc, session) => {
-    if (!acc[session.topic]) {
-      acc[session.topic] = {
-        topic: session.topic,
-        problemsSolved: 0,
-        problemsCorrect: 0,
-        lastPracticed: session.startedAt
-      };
-    }
-    acc[session.topic].problemsSolved += session.problemsAttempted;
-    acc[session.topic].problemsCorrect += session.problemsCorrect;
-    if (session.startedAt > acc[session.topic].lastPracticed) {
-      acc[session.topic].lastPracticed = session.startedAt;
-    }
-    return acc;
-  }, {} as Record<MathTopic, { topic: MathTopic; problemsSolved: number; problemsCorrect: number; lastPracticed: Timestamp }>);
+  const topicProgress = recentSessions.reduce(
+    (acc, session) => {
+      if (!acc[session.topic]) {
+        acc[session.topic] = {
+          topic: session.topic,
+          problemsSolved: 0,
+          problemsCorrect: 0,
+          lastPracticed: session.startedAt,
+        };
+      }
+      acc[session.topic].problemsSolved += session.problemsAttempted;
+      acc[session.topic].problemsCorrect += session.problemsCorrect;
+      if (
+        session.startedAt.seconds > acc[session.topic].lastPracticed.seconds
+      ) {
+        acc[session.topic].lastPracticed = session.startedAt;
+      }
+      return acc;
+    },
+    {} as Record<
+      MathTopic,
+      {
+        topic: MathTopic;
+        problemsSolved: number;
+        problemsCorrect: number;
+        lastPracticed: { toDate: () => Date; seconds: number };
+      }
+    >,
+  );
 
   const recentTopics = Object.values(topicProgress)
     .sort((a, b) => b.lastPracticed.seconds - a.lastPracticed.seconds)
     .slice(0, 3)
-    .map(item => {
-      const progress = item.problemsSolved > 0
-        ? Math.round((item.problemsCorrect / item.problemsSolved) * 100)
-        : 0;
+    .map((item) => {
+      const progress =
+        item.problemsSolved > 0
+          ? Math.round((item.problemsCorrect / item.problemsSolved) * 100)
+          : 0;
       const lastDate = item.lastPracticed.toDate();
       const now = new Date();
-      const diffDays = Math.floor((now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
-      let lastPracticed = '오늘';
-      if (diffDays === 1) lastPracticed = '어제';
+      const diffDays = Math.floor(
+        (now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24),
+      );
+      let lastPracticed = "오늘";
+      if (diffDays === 1) lastPracticed = "어제";
       else if (diffDays > 1) lastPracticed = `${diffDays}일 전`;
 
-      return { topic: item.topic, progress, lastPracticed, count: item.problemsSolved };
+      return {
+        topic: item.topic,
+        progress,
+        lastPracticed,
+        count: item.problemsSolved,
+      };
     });
 
-  const recentAchievements = achievements.slice(0, 3).map(ach => {
-    const achievementInfo = ACHIEVEMENTS_MAP[ach.achievementId] || { name: ach.achievementId, icon: '🎖️', color: 'from-gray-500 to-slate-500' };
+  const recentAchievements = achievements.slice(0, 3).map((ach) => {
+    const achievementInfo = ACHIEVEMENTS_MAP[ach.achievementId] || {
+      name: ach.achievementId,
+      icon: "🎖️",
+      color: "from-gray-500 to-slate-500",
+    };
     const unlockedDate = ach.unlockedAt.toDate();
     const now = new Date();
-    const diffDays = Math.floor((now.getTime() - unlockedDate.getTime()) / (1000 * 60 * 60 * 24));
-    let dateStr = '오늘';
-    if (diffDays === 1) dateStr = '어제';
+    const diffDays = Math.floor(
+      (now.getTime() - unlockedDate.getTime()) / (1000 * 60 * 60 * 24),
+    );
+    let dateStr = "오늘";
+    if (diffDays === 1) dateStr = "어제";
     else if (diffDays > 1) dateStr = `${diffDays}일 전`;
 
     return {
       name: achievementInfo.name,
       icon: achievementInfo.icon,
       color: achievementInfo.color,
-      date: dateStr
+      date: dateStr,
     };
   });
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return '좋은 아침이에요';
-    if (hour < 18) return '좋은 오후예요';
-    return '좋은 저녁이에요';
+    if (hour < 12) return "좋은 아침이에요";
+    if (hour < 18) return "좋은 오후예요";
+    return "좋은 저녁이에요";
   };
 
   return (
@@ -295,7 +381,9 @@ export default function DashboardPage() {
                 />
               ))}
               {streakDays > 7 && (
-                <span className="text-[10px] text-amber-400 ml-1">+{streakDays - 7}</span>
+                <span className="text-[10px] text-amber-400 ml-1">
+                  +{streakDays - 7}
+                </span>
               )}
             </div>
           )}
@@ -308,7 +396,9 @@ export default function DashboardPage() {
               <Target className="w-6 h-6 text-emerald-400" />
             </div>
           </div>
-          <div className="text-3xl font-bold text-white mb-1">{todayAccuracy}%</div>
+          <div className="text-3xl font-bold text-white mb-1">
+            {todayAccuracy}%
+          </div>
           <div className="text-sm text-slate-400">오늘 정답률</div>
           <div className="mt-3 progress-modern">
             <div
@@ -325,11 +415,12 @@ export default function DashboardPage() {
               <Clock className="w-6 h-6 text-violet-400" />
             </div>
           </div>
-          <div className="text-3xl font-bold text-white mb-1">{todayFlowTime}<span className="text-lg text-slate-400">분</span></div>
-          <div className="text-sm text-slate-400">오늘 학습 시간</div>
-          <div className="mt-3 text-xs text-slate-500">
-            목표: 30분
+          <div className="text-3xl font-bold text-white mb-1">
+            {todayFlowTime}
+            <span className="text-lg text-slate-400">분</span>
           </div>
+          <div className="text-sm text-slate-400">오늘 학습 시간</div>
+          <div className="mt-3 text-xs text-slate-500">목표: 30분</div>
         </div>
 
         {/* Level */}
@@ -338,7 +429,9 @@ export default function DashboardPage() {
             <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center">
               <Zap className="w-6 h-6 text-white" />
             </div>
-            <span className="text-xs font-medium text-white/80">{xpProgress}/100 XP</span>
+            <span className="text-xs font-medium text-white/80">
+              {xpProgress}/100 XP
+            </span>
           </div>
           <div className="text-3xl font-bold text-white mb-1">Lv.{level}</div>
           <div className="text-sm text-white/80">현재 레벨</div>
@@ -357,7 +450,9 @@ export default function DashboardPage() {
         <div className="lg:col-span-2 glass-card p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-lg font-semibold text-white mb-1">오늘의 학습</h2>
+              <h2 className="text-lg font-semibold text-white mb-1">
+                오늘의 학습
+              </h2>
               <p className="text-sm text-slate-400">목표를 향해 달려봐요</p>
             </div>
             <div className="badge-modern">
@@ -390,14 +485,22 @@ export default function DashboardPage() {
                     className="transition-all duration-500"
                   />
                   <defs>
-                    <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <linearGradient
+                      id="progressGradient"
+                      x1="0%"
+                      y1="0%"
+                      x2="100%"
+                      y2="0%"
+                    >
                       <stop offset="0%" stopColor="#6366f1" />
                       <stop offset="100%" stopColor="#a855f7" />
                     </linearGradient>
                   </defs>
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-2xl font-bold text-white">{Math.round((todayProblems / todayLimit) * 100)}%</span>
+                  <span className="text-2xl font-bold text-white">
+                    {Math.round((todayProblems / todayLimit) * 100)}%
+                  </span>
                   <span className="text-xs text-slate-400">완료</span>
                 </div>
               </div>
@@ -406,19 +509,25 @@ export default function DashboardPage() {
                 <div>
                   <div className="flex justify-between text-sm mb-2">
                     <span className="text-slate-400">문제 진행률</span>
-                    <span className="text-white font-medium">{todayProblems}문제 완료</span>
+                    <span className="text-white font-medium">
+                      {todayProblems}문제 완료
+                    </span>
                   </div>
                   <div className="progress-modern">
                     <div
                       className="progress-modern-bar"
-                      style={{ width: `${(todayProblems / todayLimit) * 100}%` }}
+                      style={{
+                        width: `${(todayProblems / todayLimit) * 100}%`,
+                      }}
                     />
                   </div>
                 </div>
                 <div>
                   <div className="flex justify-between text-sm mb-2">
                     <span className="text-slate-400">경험치</span>
-                    <span className="text-white font-medium">{xpProgress} XP</span>
+                    <span className="text-white font-medium">
+                      {xpProgress} XP
+                    </span>
                   </div>
                   <div className="h-2 bg-white/5 rounded-full overflow-hidden">
                     <div
@@ -448,7 +557,10 @@ export default function DashboardPage() {
               <Trophy className="w-5 h-5 text-amber-400" />
               <h2 className="text-lg font-semibold text-white">최근 업적</h2>
             </div>
-            <Link href="/achievements" className="text-sm text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
+            <Link
+              href="/achievements"
+              className="text-sm text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+            >
               전체 <ChevronRight className="w-4 h-4" />
             </Link>
           </div>
@@ -460,11 +572,15 @@ export default function DashboardPage() {
                   key={index}
                   className="flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
                 >
-                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${achievement.color} flex items-center justify-center text-xl shadow-lg`}>
+                  <div
+                    className={`w-12 h-12 rounded-xl bg-gradient-to-br ${achievement.color} flex items-center justify-center text-xl shadow-lg`}
+                  >
                     {achievement.icon}
                   </div>
                   <div className="flex-1">
-                    <p className="font-medium text-white text-sm">{achievement.name}</p>
+                    <p className="font-medium text-white text-sm">
+                      {achievement.name}
+                    </p>
                     <p className="text-xs text-slate-500">{achievement.date}</p>
                   </div>
                   <Star className="w-4 h-4 text-amber-400" />
@@ -476,8 +592,12 @@ export default function DashboardPage() {
               <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white/5 flex items-center justify-center">
                 <Trophy className="w-8 h-8 text-slate-600" />
               </div>
-              <p className="text-slate-400 text-sm mb-1">아직 업적이 없습니다</p>
-              <p className="text-xs text-slate-500">학습을 시작하면 업적을 획득할 수 있어요!</p>
+              <p className="text-slate-400 text-sm mb-1">
+                아직 업적이 없습니다
+              </p>
+              <p className="text-xs text-slate-500">
+                학습을 시작하면 업적을 획득할 수 있어요!
+              </p>
             </div>
           )}
         </div>
@@ -490,7 +610,10 @@ export default function DashboardPage() {
             <BookOpen className="w-5 h-5 text-indigo-400" />
             <h2 className="text-lg font-semibold text-white">학습 중인 주제</h2>
           </div>
-          <Link href="/practice" className="text-sm text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
+          <Link
+            href="/practice"
+            className="text-sm text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+          >
             새 주제 <ChevronRight className="w-4 h-4" />
           </Link>
         </div>
@@ -503,7 +626,9 @@ export default function DashboardPage() {
                 className="p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-all group cursor-pointer"
               >
                 <div className="flex items-center justify-between mb-3">
-                  <span className="font-medium text-white">{MATH_TOPICS[item.topic]}</span>
+                  <span className="font-medium text-white">
+                    {MATH_TOPICS[item.topic]}
+                  </span>
                   <span className="text-xs text-slate-500 bg-white/5 px-2 py-1 rounded-full">
                     {item.lastPracticed}
                   </span>
@@ -516,7 +641,9 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-slate-500">{item.count}문제 풀이</span>
-                  <span className="text-indigo-400 font-medium">{item.progress}% 정답률</span>
+                  <span className="text-indigo-400 font-medium">
+                    {item.progress}% 정답률
+                  </span>
                 </div>
               </div>
             ))}
@@ -527,11 +654,12 @@ export default function DashboardPage() {
               <TrendingUp className="w-10 h-10 text-indigo-400" />
             </div>
             <p className="text-slate-400 mb-1">아직 학습 기록이 없습니다</p>
-            <p className="text-sm text-slate-500 mb-4">첫 학습을 시작해보세요!</p>
+            <p className="text-sm text-slate-500 mb-4">
+              첫 학습을 시작해보세요!
+            </p>
             <Link href="/practice">
               <button className="btn-primary">
-                <Sparkles className="w-4 h-4" />
-                첫 학습 시작하기
+                <Sparkles className="w-4 h-4" />첫 학습 시작하기
               </button>
             </Link>
           </div>
@@ -547,7 +675,9 @@ export default function DashboardPage() {
             </div>
             <div>
               <p className="text-sm text-slate-400">총 경험치</p>
-              <p className="text-2xl font-bold gradient-text-vibrant">{totalXp.toLocaleString()} XP</p>
+              <p className="text-2xl font-bold gradient-text-vibrant">
+                {totalXp.toLocaleString()} XP
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-6">
@@ -557,7 +687,9 @@ export default function DashboardPage() {
             </div>
             <div className="w-px h-10 bg-white/10" />
             <div className="text-center">
-              <p className="text-2xl font-bold text-emerald-400">{100 - xpProgress}</p>
+              <p className="text-2xl font-bold text-emerald-400">
+                {100 - xpProgress}
+              </p>
               <p className="text-xs text-slate-500">다음 레벨까지</p>
             </div>
           </div>

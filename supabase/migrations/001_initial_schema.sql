@@ -1,5 +1,5 @@
 -- ============================================================
--- MathFlow - Initial Database Schema
+-- 셈마루(SemMaru) - Initial Database Schema
 -- ============================================================
 
 -- Enable UUID extension

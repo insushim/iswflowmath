@@ -1,15 +1,21 @@
-'use client';
+"use client";
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User } from 'firebase/auth';
-import { onAuthChange, getUserProfile } from './auth';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode,
+} from "react";
+import { User } from "firebase/auth";
+import { onAuthChange, getUserProfile } from "./auth";
 
 interface UserProfile {
   id: string;
   name: string;
   email: string;
   grade: number;
-  subscriptionTier: 'free' | 'basic' | 'premium';
+  subscriptionTier: "free" | "basic" | "premium";
   totalXp: number;
   currentLevel: number;
   theta: number;
@@ -34,7 +40,7 @@ const AuthContext = createContext<AuthContextType>({
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 }
@@ -57,7 +63,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           const userProfile = await getUserProfile(firebaseUser.uid);
           setProfile(userProfile as UserProfile | null);
         } catch (error) {
-          console.error('Failed to fetch user profile:', error);
+          console.error("Failed to fetch user profile:", error);
           setProfile(null);
         }
       } else {

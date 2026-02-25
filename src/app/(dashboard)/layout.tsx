@@ -1,14 +1,14 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { cn } from '@/lib/utils';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase/config';
-import { doc, getDoc } from 'firebase/firestore';
-import { signOut } from '@/lib/firebase/auth';
+import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { onAuthStateChanged, User } from "firebase/auth";
+import { auth } from "@/lib/firebase/config";
+import { api } from "@/lib/api/client";
+import { signOut } from "@/lib/firebase/auth";
 import {
   LayoutDashboard,
   PenTool,
@@ -20,14 +20,14 @@ import {
   X,
   Sparkles,
   Zap,
-} from 'lucide-react';
+} from "lucide-react";
 
 const navigation = [
-  { name: '대시보드', href: '/dashboard', icon: LayoutDashboard },
-  { name: '학습하기', href: '/practice', icon: PenTool },
-  { name: '통계', href: '/analytics', icon: BarChart3 },
-  { name: '업적', href: '/achievements', icon: Trophy },
-  { name: '설정', href: '/settings', icon: Settings },
+  { name: "대시보드", href: "/dashboard", icon: LayoutDashboard },
+  { name: "학습하기", href: "/practice", icon: PenTool },
+  { name: "통계", href: "/analytics", icon: BarChart3 },
+  { name: "업적", href: "/achievements", icon: Trophy },
+  { name: "설정", href: "/settings", icon: Settings },
 ];
 
 interface UserData {
@@ -55,12 +55,21 @@ export default function DashboardLayout({
 
   const fetchUserData = useCallback(async (firebaseUser: User) => {
     try {
-      const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-      if (userDoc.exists()) {
-        setUserData(userDoc.data() as UserData);
+      const userResult = await api.getUser();
+      if (userResult?.user) {
+        const u = userResult.user;
+        setUserData({
+          name: u.name || "",
+          email: u.email || "",
+          grade: u.grade || 7,
+          currentLevel: u.current_level || 1,
+          totalXp: u.total_xp || 0,
+          theta: u.theta || 0,
+          streakDays: u.streak_days || 0,
+        });
       }
     } catch (err) {
-      console.error('[Dashboard] Failed to fetch user data:', err);
+      console.error("[Dashboard] Failed to fetch user data:", err);
     }
   }, []);
 
@@ -68,28 +77,34 @@ export default function DashboardLayout({
     let unsubscribe: (() => void) | undefined;
 
     try {
-      unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-        try {
-          if (firebaseUser) {
-            setUser(firebaseUser);
-            await fetchUserData(firebaseUser);
-          } else {
-            router.push('/login');
+      unsubscribe = onAuthStateChanged(
+        auth,
+        async (firebaseUser) => {
+          try {
+            if (firebaseUser) {
+              setUser(firebaseUser);
+              await fetchUserData(firebaseUser);
+            } else {
+              router.push("/login");
+            }
+          } catch (err) {
+            console.error("[Dashboard] Auth state change error:", err);
+            setError("사용자 정보를 불러오는 중 오류가 발생했습니다.");
+          } finally {
+            setLoading(false);
           }
-        } catch (err) {
-          console.error('[Dashboard] Auth state change error:', err);
-          setError('사용자 정보를 불러오는 중 오류가 발생했습니다.');
-        } finally {
+        },
+        (err) => {
+          console.error("[Dashboard] Auth observer error:", err);
+          setError(
+            "인증 서비스에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.",
+          );
           setLoading(false);
-        }
-      }, (err) => {
-        console.error('[Dashboard] Auth observer error:', err);
-        setError('인증 서비스에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.');
-        setLoading(false);
-      });
+        },
+      );
     } catch (err) {
-      console.error('[Dashboard] Firebase initialization error:', err);
-      setError('서비스 초기화 중 오류가 발생했습니다.');
+      console.error("[Dashboard] Firebase initialization error:", err);
+      setError("서비스 초기화 중 오류가 발생했습니다.");
       setLoading(false);
     }
 
@@ -100,7 +115,7 @@ export default function DashboardLayout({
 
   const handleLogout = async () => {
     await signOut();
-    router.push('/login');
+    router.push("/login");
   };
 
   if (loading) {
@@ -122,7 +137,9 @@ export default function DashboardLayout({
           <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-red-500/10 flex items-center justify-center">
             <X className="w-8 h-8 text-red-400" />
           </div>
-          <h2 className="text-lg font-semibold text-white mb-2">오류가 발생했습니다</h2>
+          <h2 className="text-lg font-semibold text-white mb-2">
+            오류가 발생했습니다
+          </h2>
           <p className="text-slate-400 text-sm mb-6">{error}</p>
           <div className="flex gap-3 justify-center">
             <button
@@ -132,7 +149,7 @@ export default function DashboardLayout({
               새로고침
             </button>
             <button
-              onClick={() => router.push('/login')}
+              onClick={() => router.push("/login")}
               className="btn-secondary"
             >
               로그인으로 돌아가기
@@ -147,14 +164,14 @@ export default function DashboardLayout({
     return null;
   }
 
-  const displayName = userData?.name || user.displayName || '사용자';
+  const displayName = userData?.name || user.displayName || "사용자";
   const currentLevel = userData?.currentLevel || 1;
   const totalXp = userData?.totalXp || 0;
-  const xpProgress = (totalXp % 100);
+  const xpProgress = totalXp % 100;
   const streakDays = userData?.streakDays || 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+    <div className="dark min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
       {/* Ambient background effects */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl" />
@@ -174,9 +191,11 @@ export default function DashboardLayout({
             </div>
             <div>
               <span className="font-bold text-xl gradient-text-vibrant">
-                MathFlow
+                셈마루
               </span>
-              <p className="text-[10px] text-slate-500 font-medium tracking-wider uppercase">AI 수학 학습</p>
+              <p className="text-[10px] text-slate-500 font-medium tracking-wider uppercase">
+                AI 몰입 수학
+              </p>
             </div>
           </div>
 
@@ -190,16 +209,20 @@ export default function DashboardLayout({
                   key={item.name}
                   href={item.href}
                   className={cn(
-                    'group flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200',
+                    "group flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200",
                     isActive
-                      ? 'bg-gradient-to-r from-indigo-500/20 to-violet-500/20 text-white shadow-lg shadow-indigo-500/10 border border-indigo-500/20'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      ? "bg-gradient-to-r from-indigo-500/20 to-violet-500/20 text-white shadow-lg shadow-indigo-500/10 border border-indigo-500/20"
+                      : "text-slate-400 hover:text-white hover:bg-white/5",
                   )}
                 >
-                  <Icon className={cn(
-                    'w-5 h-5 transition-colors',
-                    isActive ? 'text-indigo-400' : 'text-slate-500 group-hover:text-indigo-400'
-                  )} />
+                  <Icon
+                    className={cn(
+                      "w-5 h-5 transition-colors",
+                      isActive
+                        ? "text-indigo-400"
+                        : "text-slate-500 group-hover:text-indigo-400",
+                    )}
+                  />
                   <span>{item.name}</span>
                   {isActive && (
                     <div className="ml-auto w-1.5 h-1.5 bg-indigo-400 rounded-full" />
@@ -213,7 +236,9 @@ export default function DashboardLayout({
           <div className="mx-4 mb-4 p-4 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-violet-500/10 border border-white/5">
             <div className="flex items-center gap-2 mb-3">
               <Zap className="w-4 h-4 text-amber-400" />
-              <span className="text-xs font-semibold text-slate-300">오늘의 진행</span>
+              <span className="text-xs font-semibold text-slate-300">
+                오늘의 진행
+              </span>
             </div>
             <div className="progress-modern mb-2">
               <div
@@ -241,9 +266,13 @@ export default function DashboardLayout({
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-white truncate">{displayName}</p>
+                <p className="text-sm font-semibold text-white truncate">
+                  {displayName}
+                </p>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-indigo-400 font-medium">Lv. {currentLevel}</span>
+                  <span className="text-xs text-indigo-400 font-medium">
+                    Lv. {currentLevel}
+                  </span>
                   <span className="text-slate-600">•</span>
                   <span className="text-xs text-slate-500">{totalXp} XP</span>
                 </div>
@@ -267,13 +296,19 @@ export default function DashboardLayout({
             <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-xl flex items-center justify-center">
               <Sparkles className="w-4 h-4 text-white" />
             </div>
-            <span className="font-bold text-lg gradient-text-vibrant">MathFlow</span>
+            <span className="font-bold text-lg gradient-text-vibrant">
+              셈마루
+            </span>
           </div>
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 text-slate-400 hover:text-white transition-colors"
           >
-            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            {mobileMenuOpen ? (
+              <X className="w-5 h-5" />
+            ) : (
+              <Menu className="w-5 h-5" />
+            )}
           </button>
         </div>
 
@@ -289,10 +324,10 @@ export default function DashboardLayout({
                   href={item.href}
                   onClick={() => setMobileMenuOpen(false)}
                   className={cn(
-                    'flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors',
+                    "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors",
                     isActive
-                      ? 'bg-indigo-500/20 text-white'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      ? "bg-indigo-500/20 text-white"
+                      : "text-slate-400 hover:text-white hover:bg-white/5",
                   )}
                 >
                   <Icon className="w-5 h-5" />
@@ -324,10 +359,10 @@ export default function DashboardLayout({
                 key={item.name}
                 href={item.href}
                 className={cn(
-                  'flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all duration-200',
+                  "flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all duration-200",
                   isActive
-                    ? 'text-indigo-400 bg-indigo-500/10'
-                    : 'text-slate-500 hover:text-slate-300'
+                    ? "text-indigo-400 bg-indigo-500/10"
+                    : "text-slate-500 hover:text-slate-300",
                 )}
               >
                 <Icon className="w-5 h-5" />

@@ -1,53 +1,59 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { collection, query, where, getDocs, limit } from 'firebase/firestore';
-import { db } from '@/lib/firebase/config';
+import { useState } from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { api } from "@/lib/api/client";
 
 export default function FindEmailPage() {
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const maskEmail = (email: string): string => {
-    const [localPart, domain] = email.split('@');
+    const [localPart, domain] = email.split("@");
     if (localPart.length <= 3) {
       return `${localPart[0]}**@${domain}`;
     }
     const visiblePart = localPart.slice(0, 3);
-    const maskedPart = '*'.repeat(localPart.length - 3);
+    const maskedPart = "*".repeat(localPart.length - 3);
     return `${visiblePart}${maskedPart}@${domain}`;
   };
 
   const handleFindEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
     setResult(null);
 
     try {
-      // Firestore에서 이름으로 사용자 검색 (limit 1 필수)
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('name', '==', name.trim()), limit(1));
-      const querySnapshot = await getDocs(q);
-
-      if (querySnapshot.empty) {
-        setError('입력하신 정보와 일치하는 계정을 찾을 수 없습니다.');
+      // D1 API를 통해 이름으로 사용자 검색
+      const result = await api.findUserByName(name.trim());
+      if (result.email) {
+        setResult(result.email); // 서버에서 이미 마스킹됨
       } else {
-        // 찾은 이메일을 마스킹하여 표시
-        const foundUser = querySnapshot.docs[0].data();
-        const maskedEmail = maskEmail(foundUser.email);
-        setResult(maskedEmail);
+        setError("입력하신 정보와 일치하는 계정을 찾을 수 없습니다.");
       }
-    } catch (err) {
-      console.error('Find email error:', err);
-      setError('아이디 찾기 중 오류가 발생했습니다. 다시 시도해주세요.');
+    } catch (err: any) {
+      if (
+        err?.message?.includes("404") ||
+        err?.message?.includes("찾을 수 없")
+      ) {
+        setError("입력하신 정보와 일치하는 계정을 찾을 수 없습니다.");
+      } else {
+        console.error("Find email error:", err);
+        setError("아이디 찾기 중 오류가 발생했습니다. 다시 시도해주세요.");
+      }
     } finally {
       setLoading(false);
     }
@@ -57,12 +63,37 @@ export default function FindEmailPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <Link href="/" className="flex items-center justify-center gap-2 mb-4">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-              <span className="text-white font-bold text-xl">M</span>
+          <Link
+            href="/"
+            className="flex items-center justify-center gap-2 mb-4"
+          >
+            <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-xl flex items-center justify-center">
+              <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
+                <path
+                  d="M16 4L6 14L16 12L26 14L16 4Z"
+                  fill="white"
+                  opacity="0.9"
+                />
+                <path
+                  d="M16 12L6 14L10 26H22L26 14L16 12Z"
+                  fill="white"
+                  opacity="0.7"
+                />
+                <text
+                  x="16"
+                  y="22"
+                  textAnchor="middle"
+                  fill="white"
+                  fontSize="9"
+                  fontWeight="bold"
+                  fontFamily="serif"
+                >
+                  ∑
+                </text>
+              </svg>
             </div>
-            <span className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              MathFlow
+            <span className="font-bold text-xl bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
+              셈마루
             </span>
           </Link>
           <CardTitle className="text-2xl">아이디 찾기</CardTitle>
@@ -72,7 +103,9 @@ export default function FindEmailPage() {
           {result ? (
             <div className="space-y-4">
               <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-center">
-                <p className="text-sm text-gray-600 mb-2">회원님의 아이디(이메일)는</p>
+                <p className="text-sm text-gray-600 mb-2">
+                  회원님의 아이디(이메일)는
+                </p>
                 <p className="text-lg font-semibold text-green-700">{result}</p>
                 <p className="text-sm text-gray-600 mt-2">입니다.</p>
               </div>
@@ -103,7 +136,9 @@ export default function FindEmailPage() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">휴대폰 번호 (선택)</label>
+                <label className="text-sm font-medium">
+                  휴대폰 번호 (선택)
+                </label>
                 <Input
                   type="tel"
                   placeholder="010-0000-0000"
@@ -114,14 +149,22 @@ export default function FindEmailPage() {
                   * 휴대폰 번호는 추가 확인용이며, 현재는 이름만으로 검색됩니다.
                 </p>
               </div>
-              <Button type="submit" className="w-full" variant="gradient" loading={loading}>
+              <Button
+                type="submit"
+                className="w-full"
+                variant="gradient"
+                loading={loading}
+              >
                 아이디 찾기
               </Button>
             </form>
           )}
 
           <div className="mt-6 text-center text-sm text-gray-600">
-            <Link href="/login" className="text-blue-600 hover:underline font-medium">
+            <Link
+              href="/login"
+              className="text-blue-600 hover:underline font-medium"
+            >
               로그인으로 돌아가기
             </Link>
           </div>

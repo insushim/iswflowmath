@@ -1,5 +1,5 @@
 // ============================================================
-// MathFlow - Expert-Level Problem Generator
+// 셈마루(SemMaru) - Expert-Level Problem Generator
 // ============================================================
 // 전문 수학 문제 출제 워크플로우 기반 AI 문제 생성기
 //
@@ -10,22 +10,22 @@
 // - 수학적 역량 평가 체계 (PISA 수학 프레임워크)
 // ============================================================
 
-import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
+import { GoogleGenerativeAI, GenerativeModel } from "@google/generative-ai";
 import {
   MathTopic,
   ProblemWithIRT,
   IRTParameters,
   GenerateProblemRequest,
   MATH_TOPICS,
-} from '@/types';
-import { generateIRTParameters, calculateTargetDifficulty } from '@/lib/irt';
-import { generateUUID } from '@/lib/utils';
+} from "@/types";
+import { generateIRTParameters, calculateTargetDifficulty } from "@/lib/irt";
+import { generateUUID } from "@/lib/utils";
 import {
   CURRICULUM_DB,
   getAllStandards,
   getNotIncluded,
   CurriculumStandard,
-} from '@/data/curriculum-standards';
+} from "@/data/curriculum-standards";
 // 교차검증된 교육과정 참고 데이터 (10개 이상 출처)
 import {
   generateProblemContext,
@@ -33,7 +33,7 @@ import {
   getMisconceptionsForTopic,
   calculateProbability,
   TARGET_SUCCESS_RATE,
-} from './curriculum-reference-data';
+} from "./curriculum-reference-data";
 
 // ============================================================
 // 전문가 출제 워크플로우 상수 정의
@@ -44,24 +44,36 @@ import {
  * 수학 문제 출제 시 목표로 하는 인지 과정 정의
  */
 const COGNITIVE_LEVELS = {
-  remember: { level: 1, label: '기억하기', description: '개념, 공식, 정의 회상' },
-  understand: { level: 2, label: '이해하기', description: '개념의 의미 파악, 변환, 해석' },
-  apply: { level: 3, label: '적용하기', description: '알고리즘, 절차 실행' },
-  analyze: { level: 4, label: '분석하기', description: '구조 파악, 관계 규명' },
-  evaluate: { level: 5, label: '평가하기', description: '기준에 따른 판단' },
-  create: { level: 6, label: '창안하기', description: '새로운 해법, 증명 생성' },
+  remember: {
+    level: 1,
+    label: "기억하기",
+    description: "개념, 공식, 정의 회상",
+  },
+  understand: {
+    level: 2,
+    label: "이해하기",
+    description: "개념의 의미 파악, 변환, 해석",
+  },
+  apply: { level: 3, label: "적용하기", description: "알고리즘, 절차 실행" },
+  analyze: { level: 4, label: "분석하기", description: "구조 파악, 관계 규명" },
+  evaluate: { level: 5, label: "평가하기", description: "기준에 따른 판단" },
+  create: {
+    level: 6,
+    label: "창안하기",
+    description: "새로운 해법, 증명 생성",
+  },
 } as const;
 
 /**
  * PISA 수학 역량 프레임워크
  */
 const MATH_COMPETENCIES = {
-  reasoning: '수학적 추론',
-  modeling: '수학적 모델링',
-  problem_solving: '문제 해결',
-  representation: '수학적 표현',
-  communication: '수학적 의사소통',
-  tools: '수학적 도구 사용',
+  reasoning: "수학적 추론",
+  modeling: "수학적 모델링",
+  problem_solving: "문제 해결",
+  representation: "수학적 표현",
+  communication: "수학적 의사소통",
+  tools: "수학적 도구 사용",
 } as const;
 
 /**
@@ -69,26 +81,26 @@ const MATH_COMPETENCIES = {
  */
 const PROBLEM_TYPES = {
   // 객관식 유형
-  concept: { label: '개념 확인', difficulty_range: [-2, 0] },
-  calculation: { label: '계산력', difficulty_range: [-1, 1] },
-  reasoning: { label: '추론', difficulty_range: [0, 2] },
-  application: { label: '응용', difficulty_range: [0, 2] },
-  complex: { label: '복합', difficulty_range: [1, 3] },
+  concept: { label: "개념 확인", difficulty_range: [-2, 0] },
+  calculation: { label: "계산력", difficulty_range: [-1, 1] },
+  reasoning: { label: "추론", difficulty_range: [0, 2] },
+  application: { label: "응용", difficulty_range: [0, 2] },
+  complex: { label: "복합", difficulty_range: [1, 3] },
   // 서술형 유형
-  proof: { label: '증명', difficulty_range: [1, 3] },
-  modeling: { label: '모델링', difficulty_range: [1, 3] },
+  proof: { label: "증명", difficulty_range: [1, 3] },
+  modeling: { label: "모델링", difficulty_range: [1, 3] },
 } as const;
 
 /**
  * 오답 유형 분류 (오답 선지 설계용)
  */
 const DISTRACTOR_TYPES = {
-  sign_error: '부호 오류',
-  calculation_error: '계산 실수',
-  concept_confusion: '개념 혼동',
-  partial_solution: '불완전한 풀이',
-  common_misconception: '일반적 오개념',
-  careless_reading: '문제 독해 실수',
+  sign_error: "부호 오류",
+  calculation_error: "계산 실수",
+  concept_confusion: "개념 혼동",
+  partial_solution: "불완전한 풀이",
+  common_misconception: "일반적 오개념",
+  careless_reading: "문제 독해 실수",
 } as const;
 
 // Gemini AI 클라이언트 초기화
@@ -99,11 +111,11 @@ function getGeminiClient(): GenerativeModel {
   if (!model) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      throw new Error('GEMINI_API_KEY is not set in environment variables');
+      throw new Error("GEMINI_API_KEY is not set in environment variables");
     }
     genAI = new GoogleGenerativeAI(apiKey);
     // Gemini 2.0 Flash 사용 (안정적인 최신 버전)
-    model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
   }
   return model;
 }
@@ -116,23 +128,26 @@ function selectRandomStandard(grade: number): CurriculumStandard | null {
 }
 
 // 주제에 맞는 성취기준 선택
-function selectStandardByTopic(grade: number, topic: MathTopic): CurriculumStandard | null {
+function selectStandardByTopic(
+  grade: number,
+  topic: MathTopic,
+): CurriculumStandard | null {
   const curriculum = CURRICULUM_DB[grade];
   if (!curriculum) return null;
 
   // 주제와 영역 매핑
   const topicDomainMap: Record<MathTopic, string[]> = {
-    arithmetic: ['수와 연산', '정수와 유리수', '다항식'],
-    fractions: ['수와 연산', '분수'],
-    decimals: ['수와 연산', '소수'],
-    geometry: ['도형', '도형의 닮음', '기하'],
-    algebra: ['문자와 식', '방정식과 부등식', '변화와 관계'],
-    functions: ['함수', '좌표와 그래프'],
-    statistics: ['통계', '자료와 가능성'],
-    probability: ['확률', '자료와 가능성'],
-    calculus: ['미분', '적분', '미적분 심화'],
-    vectors: ['기하', '벡터'],
-    sequences: ['수열'],
+    arithmetic: ["수와 연산", "정수와 유리수", "다항식"],
+    fractions: ["수와 연산", "분수"],
+    decimals: ["수와 연산", "소수"],
+    geometry: ["도형", "도형의 닮음", "기하"],
+    algebra: ["문자와 식", "방정식과 부등식", "변화와 관계"],
+    functions: ["함수", "좌표와 그래프"],
+    statistics: ["통계", "자료와 가능성"],
+    probability: ["확률", "자료와 가능성"],
+    calculus: ["미분", "적분", "미적분 심화"],
+    vectors: ["기하", "벡터"],
+    sequences: ["수열"],
   };
 
   const relevantDomains = topicDomainMap[topic] || [];
@@ -140,12 +155,20 @@ function selectStandardByTopic(grade: number, topic: MathTopic): CurriculumStand
 
   // 1학기와 2학기 모두에서 관련 영역의 성취기준 수집
   for (const domainName of Object.keys(curriculum.semester1.domains)) {
-    if (relevantDomains.some(d => domainName.includes(d) || d.includes(domainName))) {
+    if (
+      relevantDomains.some(
+        (d) => domainName.includes(d) || d.includes(domainName),
+      )
+    ) {
       allStandards.push(...curriculum.semester1.domains[domainName].standards);
     }
   }
   for (const domainName of Object.keys(curriculum.semester2.domains)) {
-    if (relevantDomains.some(d => domainName.includes(d) || d.includes(domainName))) {
+    if (
+      relevantDomains.some(
+        (d) => domainName.includes(d) || d.includes(domainName),
+      )
+    ) {
       allStandards.push(...curriculum.semester2.domains[domainName].standards);
     }
   }
@@ -160,12 +183,12 @@ function selectStandardByTopic(grade: number, topic: MathTopic): CurriculumStand
 
 // 난이도 설명 생성
 function getDifficultyDescription(targetB: number): string {
-  if (targetB <= -2) return '매우 쉬운';
-  if (targetB <= -1) return '쉬운';
-  if (targetB <= 0) return '보통 수준의';
-  if (targetB <= 1) return '어려운';
-  if (targetB <= 2) return '매우 어려운';
-  return '최상위 수준의';
+  if (targetB <= -2) return "매우 쉬운";
+  if (targetB <= -1) return "쉬운";
+  if (targetB <= 0) return "보통 수준의";
+  if (targetB <= 1) return "어려운";
+  if (targetB <= 2) return "매우 어려운";
+  return "최상위 수준의";
 }
 
 // 학년 라벨 생성
@@ -187,20 +210,34 @@ function getGradeLabel(grade: number): string {
  * 6. 검토 및 수정
  */
 export async function generateProblem(
-  request: GenerateProblemRequest & { recentSuccessRate?: number }
+  request: GenerateProblemRequest & { recentSuccessRate?: number },
 ): Promise<ProblemWithIRT> {
-  const { topic, theta, grade, previous_problems = [], recentSuccessRate = 0.75 } = request;
+  const {
+    topic,
+    theta,
+    grade,
+    previous_problems = [],
+    recentSuccessRate = 0.75,
+  } = request;
 
   // ============================================================
   // 교차검증된 교육과정 데이터 기반 문제 컨텍스트 생성
   // (PISA, TIMSS, CCSS, Bloom's, Flow이론, IRT, 한국교육과정 통합)
   // ============================================================
-  const problemContext = generateProblemContext(grade, topic, theta, recentSuccessRate);
+  const problemContext = generateProblemContext(
+    grade,
+    topic,
+    theta,
+    recentSuccessRate,
+  );
 
   // Flow 이론 기반 적응형 난이도 조정 (Csikszentmihalyi)
   // 목표: 75% 정답률 = 몰입 최적 구간 (60-85% 범위)
   const flowAdjustedTheta = theta + problemContext.flowZone.adjustmentFactor;
-  const targetB = calculateTargetDifficulty(flowAdjustedTheta, TARGET_SUCCESS_RATE);
+  const targetB = calculateTargetDifficulty(
+    flowAdjustedTheta,
+    TARGET_SUCCESS_RATE,
+  );
 
   // IRT 파라미터 생성
   const irt = generateIRTParameters(targetB, grade);
@@ -222,8 +259,8 @@ export async function generateProblem(
   // 이전 문제 피하기 위한 지시
   const avoidPrevious =
     previous_problems.length > 0
-      ? `\n\n⚠️ 중복 방지: 다음 유형은 피해주세요: ${previous_problems.slice(-3).join(', ')}`
-      : '';
+      ? `\n\n⚠️ 중복 방지: 다음 유형은 피해주세요: ${previous_problems.slice(-3).join(", ")}`
+      : "";
 
   // 전문가 출제 워크플로우 프롬프트
   const prompt = `당신은 한국교육과정평가원 수준의 수학 문제 출제 전문가입니다.
@@ -237,12 +274,16 @@ export async function generateProblem(
 ### 평가 영역: ${MATH_TOPICS[topic]}
 
 ### 성취기준 정보:
-${standard ? `
+${
+  standard
+    ? `
 - 성취기준 코드: ${standard.code}
 - 성취기준 내용: ${standard.description}
-- 핵심 개념/용어: ${standard.keywords.join(', ')}
-- 관련 문제 유형: ${standard.examples.join(' / ')}
-` : '일반적인 ' + MATH_TOPICS[topic] + ' 문제'}
+- 핵심 개념/용어: ${standard.keywords.join(", ")}
+- 관련 문제 유형: ${standard.examples.join(" / ")}
+`
+    : "일반적인 " + MATH_TOPICS[topic] + " 문제"
+}
 
 ### 인지적 목표 (블룸 분류):
 - 수준: ${cognitiveLevel.label} (Level ${cognitiveLevel.level})
@@ -310,7 +351,7 @@ ${standard ? `
 ═══════════════════════════════════════════════════
 
 이 학년에서 다루지 않는 내용 (절대 사용 금지):
-${notIncluded.map(item => `• ${item}`).join('\n')}
+${notIncluded.map((item) => `• ${item}`).join("\n")}
 ${avoidPrevious}
 
 ═══════════════════════════════════════════════════
@@ -351,14 +392,14 @@ JSON만 반환해주세요.`;
     // JSON 파싱 (마크다운 코드 블록 제거)
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      throw new Error('Failed to parse Gemini response as JSON');
+      throw new Error("Failed to parse Gemini response as JSON");
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
 
     // 옵션에서 오류 유형 설명 제거 (UI용)
     const cleanedOptions = parsed.options.map((opt: string) =>
-      opt.replace(/\s*\(오류유형:.*?\)/g, '').trim()
+      opt.replace(/\s*\(오류유형:.*?\)/g, "").trim(),
     );
 
     // 문제 객체 생성
@@ -367,18 +408,20 @@ JSON만 반환해주세요.`;
       content: parsed.content,
       latex: parsed.latex || undefined,
       options: cleanedOptions,
-      correct_answer: parsed.correct_answer.replace(/\s*\(오류유형:.*?\)/g, '').trim(),
+      correct_answer: parsed.correct_answer
+        .replace(/\s*\(오류유형:.*?\)/g, "")
+        .trim(),
       solution: parsed.solution,
       hints: parsed.hints || [],
       topic,
-      subtopic: parsed.subtopic || (standard?.description || MATH_TOPICS[topic]),
+      subtopic: parsed.subtopic || standard?.description || MATH_TOPICS[topic],
       irt,
       created_at: new Date().toISOString(),
     };
 
     return problem;
   } catch (error) {
-    console.error('Error generating problem with Gemini:', error);
+    console.error("Error generating problem with Gemini:", error);
 
     // 폴백: 성취기준 기반 기본 문제 반환
     return generateFallbackProblem(topic, grade, irt, standard);
@@ -415,138 +458,199 @@ function generateFallbackProblem(
   topic: MathTopic,
   grade: number,
   irt: IRTParameters,
-  standard: CurriculumStandard | null
+  standard: CurriculumStandard | null,
 ): ProblemWithIRT {
   // 학년별 폴백 문제
   const gradeProblems: Record<number, () => Partial<ProblemWithIRT>> = {
     // 초등학교 1학년
     1: () => ({
-      content: '사과가 5개 있습니다. 엄마가 3개를 더 주셨습니다. 사과는 모두 몇 개인가요?',
-      options: ['7개', '8개', '6개', '9개'],
-      correct_answer: '8개',
-      solution: '5 + 3 = 8이므로 사과는 모두 8개입니다.',
-      hints: ['5에 3을 더하세요', '손가락으로 세어보세요', '정답은 8개입니다'],
-      subtopic: '한 자리 수의 덧셈',
+      content:
+        "사과가 5개 있습니다. 엄마가 3개를 더 주셨습니다. 사과는 모두 몇 개인가요?",
+      options: ["7개", "8개", "6개", "9개"],
+      correct_answer: "8개",
+      solution: "5 + 3 = 8이므로 사과는 모두 8개입니다.",
+      hints: ["5에 3을 더하세요", "손가락으로 세어보세요", "정답은 8개입니다"],
+      subtopic: "한 자리 수의 덧셈",
     }),
     // 초등학교 2학년
     2: () => ({
-      content: '구구단 7단에서 7 × 6의 값은 얼마인가요?',
-      options: ['42', '48', '36', '49'],
-      correct_answer: '42',
-      solution: '7 × 6 = 42입니다. 7을 6번 더하면 7 + 7 + 7 + 7 + 7 + 7 = 42입니다.',
-      hints: ['7을 6번 더해보세요', '7 × 5 = 35에 7을 더하세요', '정답은 42입니다'],
-      subtopic: '구구단',
+      content: "구구단 7단에서 7 × 6의 값은 얼마인가요?",
+      options: ["42", "48", "36", "49"],
+      correct_answer: "42",
+      solution:
+        "7 × 6 = 42입니다. 7을 6번 더하면 7 + 7 + 7 + 7 + 7 + 7 = 42입니다.",
+      hints: [
+        "7을 6번 더해보세요",
+        "7 × 5 = 35에 7을 더하세요",
+        "정답은 42입니다",
+      ],
+      subtopic: "구구단",
     }),
     // 초등학교 3학년
     3: () => ({
-      content: '456 + 278을 계산하세요.',
-      options: ['734', '724', '744', '714'],
-      correct_answer: '734',
-      solution: '일의 자리: 6 + 8 = 14 (4를 쓰고 1 받아올림)\n십의 자리: 5 + 7 + 1 = 13 (3을 쓰고 1 받아올림)\n백의 자리: 4 + 2 + 1 = 7\n따라서 734입니다.',
-      hints: ['일의 자리부터 계산하세요', '받아올림을 잊지 마세요', '각 자리수를 더하세요'],
-      subtopic: '세 자리 수의 덧셈',
+      content: "456 + 278을 계산하세요.",
+      options: ["734", "724", "744", "714"],
+      correct_answer: "734",
+      solution:
+        "일의 자리: 6 + 8 = 14 (4를 쓰고 1 받아올림)\n십의 자리: 5 + 7 + 1 = 13 (3을 쓰고 1 받아올림)\n백의 자리: 4 + 2 + 1 = 7\n따라서 734입니다.",
+      hints: [
+        "일의 자리부터 계산하세요",
+        "받아올림을 잊지 마세요",
+        "각 자리수를 더하세요",
+      ],
+      subtopic: "세 자리 수의 덧셈",
     }),
     // 초등학교 4학년
     4: () => ({
-      content: '삼각형의 세 각의 크기가 각각 50°, 70°, □°입니다. □에 알맞은 수를 구하세요.',
-      options: ['60', '50', '70', '80'],
-      correct_answer: '60',
-      solution: '삼각형의 세 각의 합은 180°입니다.\n50° + 70° + □° = 180°\n□° = 180° - 50° - 70° = 60°',
-      hints: ['삼각형의 세 각의 합은 180°입니다', '50 + 70 = 120입니다', '180 - 120을 계산하세요'],
-      subtopic: '삼각형의 내각의 합',
+      content:
+        "삼각형의 세 각의 크기가 각각 50°, 70°, □°입니다. □에 알맞은 수를 구하세요.",
+      options: ["60", "50", "70", "80"],
+      correct_answer: "60",
+      solution:
+        "삼각형의 세 각의 합은 180°입니다.\n50° + 70° + □° = 180°\n□° = 180° - 50° - 70° = 60°",
+      hints: [
+        "삼각형의 세 각의 합은 180°입니다",
+        "50 + 70 = 120입니다",
+        "180 - 120을 계산하세요",
+      ],
+      subtopic: "삼각형의 내각의 합",
     }),
     // 초등학교 5학년
     5: () => ({
-      content: '밑변이 12cm, 높이가 8cm인 삼각형의 넓이를 구하세요.',
-      options: ['48cm²', '96cm²', '20cm²', '24cm²'],
-      correct_answer: '48cm²',
-      solution: '삼각형의 넓이 = (밑변 × 높이) ÷ 2\n= (12 × 8) ÷ 2\n= 96 ÷ 2\n= 48cm²',
-      hints: ['삼각형 넓이 공식을 사용하세요', '밑변 × 높이를 먼저 계산하세요', '그 결과를 2로 나누세요'],
-      subtopic: '삼각형의 넓이',
+      content: "밑변이 12cm, 높이가 8cm인 삼각형의 넓이를 구하세요.",
+      options: ["48cm²", "96cm²", "20cm²", "24cm²"],
+      correct_answer: "48cm²",
+      solution:
+        "삼각형의 넓이 = (밑변 × 높이) ÷ 2\n= (12 × 8) ÷ 2\n= 96 ÷ 2\n= 48cm²",
+      hints: [
+        "삼각형 넓이 공식을 사용하세요",
+        "밑변 × 높이를 먼저 계산하세요",
+        "그 결과를 2로 나누세요",
+      ],
+      subtopic: "삼각형의 넓이",
     }),
     // 초등학교 6학년
     6: () => ({
-      content: '어떤 물건의 원가가 20,000원입니다. 25%의 이익을 붙여 팔면 판매 가격은 얼마인가요?',
-      options: ['25,000원', '24,000원', '22,500원', '27,500원'],
-      correct_answer: '25,000원',
-      solution: '이익 = 원가 × 이익률 = 20,000 × 0.25 = 5,000원\n판매 가격 = 원가 + 이익 = 20,000 + 5,000 = 25,000원',
-      hints: ['25%를 소수로 바꾸면 0.25입니다', '원가에 이익률을 곱해 이익을 구하세요', '원가에 이익을 더하세요'],
-      subtopic: '비율과 백분율',
+      content:
+        "어떤 물건의 원가가 20,000원입니다. 25%의 이익을 붙여 팔면 판매 가격은 얼마인가요?",
+      options: ["25,000원", "24,000원", "22,500원", "27,500원"],
+      correct_answer: "25,000원",
+      solution:
+        "이익 = 원가 × 이익률 = 20,000 × 0.25 = 5,000원\n판매 가격 = 원가 + 이익 = 20,000 + 5,000 = 25,000원",
+      hints: [
+        "25%를 소수로 바꾸면 0.25입니다",
+        "원가에 이익률을 곱해 이익을 구하세요",
+        "원가에 이익을 더하세요",
+      ],
+      subtopic: "비율과 백분율",
     }),
     // 중학교 1학년
     7: () => ({
-      content: '방정식 $3x - 7 = 14$를 풀어 $x$의 값을 구하세요.',
-      latex: '3x - 7 = 14',
-      options: ['7', '8', '6', '9'],
-      correct_answer: '7',
-      solution: '3x - 7 = 14\n3x = 14 + 7 (양변에 7을 더함)\n3x = 21\nx = 7 (양변을 3으로 나눔)',
-      hints: ['먼저 -7을 이항하세요', '3x = 21이 됩니다', '양변을 3으로 나누세요'],
-      subtopic: '일차방정식',
+      content: "방정식 $3x - 7 = 14$를 풀어 $x$의 값을 구하세요.",
+      latex: "3x - 7 = 14",
+      options: ["7", "8", "6", "9"],
+      correct_answer: "7",
+      solution:
+        "3x - 7 = 14\n3x = 14 + 7 (양변에 7을 더함)\n3x = 21\nx = 7 (양변을 3으로 나눔)",
+      hints: [
+        "먼저 -7을 이항하세요",
+        "3x = 21이 됩니다",
+        "양변을 3으로 나누세요",
+      ],
+      subtopic: "일차방정식",
     }),
     // 중학교 2학년
     8: () => ({
-      content: '연립방정식 $\\begin{cases} x + y = 7 \\\\ 2x - y = 5 \\end{cases}$를 풀어 $x$와 $y$의 값을 구하세요.',
-      latex: '\\begin{cases} x + y = 7 \\\\ 2x - y = 5 \\end{cases}',
-      options: ['x = 4, y = 3', 'x = 3, y = 4', 'x = 5, y = 2', 'x = 2, y = 5'],
-      correct_answer: 'x = 4, y = 3',
-      solution: '두 식을 더하면: x + y + 2x - y = 7 + 5\n3x = 12, x = 4\n첫 번째 식에 대입: 4 + y = 7, y = 3',
-      hints: ['가감법을 사용하세요', '두 식을 더하면 y가 소거됩니다', 'x를 구한 후 대입하세요'],
-      subtopic: '연립방정식',
+      content:
+        "연립방정식 $\\begin{cases} x + y = 7 \\\\ 2x - y = 5 \\end{cases}$를 풀어 $x$와 $y$의 값을 구하세요.",
+      latex: "\\begin{cases} x + y = 7 \\\\ 2x - y = 5 \\end{cases}",
+      options: ["x = 4, y = 3", "x = 3, y = 4", "x = 5, y = 2", "x = 2, y = 5"],
+      correct_answer: "x = 4, y = 3",
+      solution:
+        "두 식을 더하면: x + y + 2x - y = 7 + 5\n3x = 12, x = 4\n첫 번째 식에 대입: 4 + y = 7, y = 3",
+      hints: [
+        "가감법을 사용하세요",
+        "두 식을 더하면 y가 소거됩니다",
+        "x를 구한 후 대입하세요",
+      ],
+      subtopic: "연립방정식",
     }),
     // 중학교 3학년
     9: () => ({
-      content: '이차방정식 $x^2 - 5x + 6 = 0$의 두 근을 구하세요.',
-      latex: 'x^2 - 5x + 6 = 0',
-      options: ['x = 2 또는 x = 3', 'x = 1 또는 x = 6', 'x = -2 또는 x = -3', 'x = 2 또는 x = -3'],
-      correct_answer: 'x = 2 또는 x = 3',
-      solution: 'x² - 5x + 6 = 0\n(x - 2)(x - 3) = 0 (인수분해)\nx - 2 = 0 또는 x - 3 = 0\nx = 2 또는 x = 3',
-      hints: ['인수분해를 시도하세요', '합이 5이고 곱이 6인 두 수를 찾으세요', '(x - 2)(x - 3) = 0'],
-      subtopic: '이차방정식의 인수분해',
+      content: "이차방정식 $x^2 - 5x + 6 = 0$의 두 근을 구하세요.",
+      latex: "x^2 - 5x + 6 = 0",
+      options: [
+        "x = 2 또는 x = 3",
+        "x = 1 또는 x = 6",
+        "x = -2 또는 x = -3",
+        "x = 2 또는 x = -3",
+      ],
+      correct_answer: "x = 2 또는 x = 3",
+      solution:
+        "x² - 5x + 6 = 0\n(x - 2)(x - 3) = 0 (인수분해)\nx - 2 = 0 또는 x - 3 = 0\nx = 2 또는 x = 3",
+      hints: [
+        "인수분해를 시도하세요",
+        "합이 5이고 곱이 6인 두 수를 찾으세요",
+        "(x - 2)(x - 3) = 0",
+      ],
+      subtopic: "이차방정식의 인수분해",
     }),
     // 고등학교 1학년
     10: () => ({
-      content: '복소수 $(2 + 3i)(1 - 2i)$를 계산하세요. (단, $i^2 = -1$)',
-      latex: '(2 + 3i)(1 - 2i)',
-      options: ['8 - i', '8 + i', '-4 - i', '4 + 7i'],
-      correct_answer: '8 - i',
-      solution: '(2 + 3i)(1 - 2i)\n= 2(1) + 2(-2i) + 3i(1) + 3i(-2i)\n= 2 - 4i + 3i - 6i²\n= 2 - i - 6(-1)\n= 2 - i + 6\n= 8 - i',
-      hints: ['분배법칙을 사용하세요', 'i² = -1임을 기억하세요', '실수부와 허수부를 정리하세요'],
-      subtopic: '복소수의 연산',
+      content: "복소수 $(2 + 3i)(1 - 2i)$를 계산하세요. (단, $i^2 = -1$)",
+      latex: "(2 + 3i)(1 - 2i)",
+      options: ["8 - i", "8 + i", "-4 - i", "4 + 7i"],
+      correct_answer: "8 - i",
+      solution:
+        "(2 + 3i)(1 - 2i)\n= 2(1) + 2(-2i) + 3i(1) + 3i(-2i)\n= 2 - 4i + 3i - 6i²\n= 2 - i - 6(-1)\n= 2 - i + 6\n= 8 - i",
+      hints: [
+        "분배법칙을 사용하세요",
+        "i² = -1임을 기억하세요",
+        "실수부와 허수부를 정리하세요",
+      ],
+      subtopic: "복소수의 연산",
     }),
     // 고등학교 2학년
     11: () => ({
-      content: '$\\log_2 32$의 값을 구하세요.',
-      latex: '\\log_2 32',
-      options: ['5', '4', '6', '3'],
-      correct_answer: '5',
-      solution: 'log₂ 32 = x라 하면\n2^x = 32\n32 = 2^5 이므로\nx = 5',
-      hints: ['로그의 정의를 사용하세요', '32를 2의 거듭제곱으로 나타내세요', '2^5 = 32입니다'],
-      subtopic: '로그',
+      content: "$\\log_2 32$의 값을 구하세요.",
+      latex: "\\log_2 32",
+      options: ["5", "4", "6", "3"],
+      correct_answer: "5",
+      solution: "log₂ 32 = x라 하면\n2^x = 32\n32 = 2^5 이므로\nx = 5",
+      hints: [
+        "로그의 정의를 사용하세요",
+        "32를 2의 거듭제곱으로 나타내세요",
+        "2^5 = 32입니다",
+      ],
+      subtopic: "로그",
     }),
     // 고등학교 3학년
     12: () => ({
-      content: '$f(x) = x^3 - 3x^2 + 2$의 도함수 $f\'(x)$를 구하세요.',
-      latex: 'f(x) = x^3 - 3x^2 + 2',
-      options: ['$3x^2 - 6x$', '$3x^2 - 6x + 2$', '$x^2 - 6x$', '$3x^2 - 3x$'],
-      correct_answer: '$3x^2 - 6x$',
-      solution: 'f(x) = x³ - 3x² + 2\nf\'(x) = 3x² - 6x (상수항 2의 도함수는 0)\n\n미분 공식: (xⁿ)\' = nxⁿ⁻¹',
-      hints: ['각 항을 미분하세요', '(x³)\' = 3x²', '상수의 미분은 0입니다'],
-      subtopic: '다항함수의 미분',
+      content: "$f(x) = x^3 - 3x^2 + 2$의 도함수 $f'(x)$를 구하세요.",
+      latex: "f(x) = x^3 - 3x^2 + 2",
+      options: ["$3x^2 - 6x$", "$3x^2 - 6x + 2$", "$x^2 - 6x$", "$3x^2 - 3x$"],
+      correct_answer: "$3x^2 - 6x$",
+      solution:
+        "f(x) = x³ - 3x² + 2\nf'(x) = 3x² - 6x (상수항 2의 도함수는 0)\n\n미분 공식: (xⁿ)' = nxⁿ⁻¹",
+      hints: ["각 항을 미분하세요", "(x³)' = 3x²", "상수의 미분은 0입니다"],
+      subtopic: "다항함수의 미분",
     }),
   };
 
-  const fallback = gradeProblems[grade] ? gradeProblems[grade]() : gradeProblems[6]();
+  const fallback = gradeProblems[grade]
+    ? gradeProblems[grade]()
+    : gradeProblems[6]();
 
   return {
     id: generateUUID(),
-    content: fallback.content || '문제를 불러오는 중 오류가 발생했습니다.',
+    content: fallback.content || "문제를 불러오는 중 오류가 발생했습니다.",
     latex: fallback.latex,
-    options: fallback.options || ['A', 'B', 'C', 'D'],
-    correct_answer: fallback.correct_answer || 'A',
-    solution: fallback.solution || '풀이를 불러올 수 없습니다.',
-    hints: fallback.hints || ['힌트 없음'],
+    options: fallback.options || ["A", "B", "C", "D"],
+    correct_answer: fallback.correct_answer || "A",
+    solution: fallback.solution || "풀이를 불러올 수 없습니다.",
+    hints: fallback.hints || ["힌트 없음"],
     topic,
-    subtopic: fallback.subtopic || (standard?.description || MATH_TOPICS[topic]),
+    subtopic: fallback.subtopic || standard?.description || MATH_TOPICS[topic],
     irt,
     created_at: new Date().toISOString(),
   };
@@ -557,7 +661,7 @@ function generateFallbackProblem(
  */
 export async function generateHint(
   problem: ProblemWithIRT,
-  hintIndex: number
+  hintIndex: number,
 ): Promise<string> {
   // 이미 생성된 힌트가 있으면 반환
   if (problem.hints && problem.hints[hintIndex]) {
@@ -571,7 +675,7 @@ export async function generateHint(
 정답: ${problem.correct_answer}
 요청된 힌트 번호: ${hintIndex + 1}
 
-힌트 ${hintIndex + 1}번째는 ${hintIndex === 0 ? '가장 간접적인' : hintIndex === 1 ? '중간 정도의' : '직접적인'} 힌트여야 합니다.
+힌트 ${hintIndex + 1}번째는 ${hintIndex === 0 ? "가장 간접적인" : hintIndex === 1 ? "중간 정도의" : "직접적인"} 힌트여야 합니다.
 
 힌트만 반환해주세요 (JSON 형식 아님, 텍스트만):`;
 
@@ -581,7 +685,7 @@ export async function generateHint(
     const response = await result.response;
     return response.text().trim();
   } catch (error) {
-    console.error('Error generating hint:', error);
+    console.error("Error generating hint:", error);
     return `힌트 ${hintIndex + 1}: 문제를 천천히 다시 읽어보세요.`;
   }
 }
@@ -590,12 +694,12 @@ export async function generateHint(
  * 상세 풀이 설명 생성
  */
 export async function generateDetailedSolution(
-  problem: ProblemWithIRT
+  problem: ProblemWithIRT,
 ): Promise<string> {
   const prompt = `다음 수학 문제에 대한 상세한 풀이를 한국어로 작성해주세요.
 
 문제: ${problem.content}
-${problem.latex ? `수식: ${problem.latex}` : ''}
+${problem.latex ? `수식: ${problem.latex}` : ""}
 정답: ${problem.correct_answer}
 
 풀이 요구사항:
@@ -613,7 +717,7 @@ ${problem.latex ? `수식: ${problem.latex}` : ''}
     const response = await result.response;
     return response.text().trim();
   } catch (error) {
-    console.error('Error generating detailed solution:', error);
+    console.error("Error generating detailed solution:", error);
     return problem.solution;
   }
 }
@@ -622,7 +726,15 @@ ${problem.latex ? `수식: ${problem.latex}` : ''}
 // 몰입 학습 문제 생성 (시간 기반, 성취기준 기반)
 // ============================================================
 
-export type ImmersionDifficulty = '5min' | '10min' | '30min' | '1hour' | '1day' | '3days' | '7days' | '1month';
+export type ImmersionDifficulty =
+  | "5min"
+  | "10min"
+  | "30min"
+  | "1hour"
+  | "1day"
+  | "3days"
+  | "7days"
+  | "1month";
 
 interface ImmersionProblemConfig {
   duration: string;
@@ -633,7 +745,7 @@ interface ImmersionProblemConfig {
 
 interface ImmersionProblemConfigExtended extends ImmersionProblemConfig {
   gradeBoost: number; // 상위 학년 개념 허용 범위
-  level: string;      // 난이도 레벨 설명
+  level: string; // 난이도 레벨 설명
 }
 
 /**
@@ -650,70 +762,73 @@ interface ImmersionProblemConfigExtended extends ImmersionProblemConfig {
  * - 학생이 힌트를 통해 스스로 도달할 수 있는 범위
  * - "생각하면 풀 수 있다"는 확신이 있어야 몰입 발생
  */
-const IMMERSION_CONFIG: Record<ImmersionDifficulty, ImmersionProblemConfigExtended> = {
-  '5min': {
-    duration: '5분',
-    complexity: '해당 학년 기본 개념 복습',
+const IMMERSION_CONFIG: Record<
+  ImmersionDifficulty,
+  ImmersionProblemConfigExtended
+> = {
+  "5min": {
+    duration: "5분",
+    complexity: "해당 학년 기본 개념 복습",
     steps: 2,
-    description: '빠르게 성공 경험을 쌓는 기초 문제',
-    gradeBoost: 0,  // 해당 학년 수준
-    level: '기초',
+    description: "빠르게 성공 경험을 쌓는 기초 문제",
+    gradeBoost: 0, // 해당 학년 수준
+    level: "기초",
   },
-  '10min': {
-    duration: '10분',
-    complexity: '해당 학년 응용',
+  "10min": {
+    duration: "10분",
+    complexity: "해당 학년 응용",
     steps: 3,
-    description: '약간의 사고력이 필요한 응용 문제 (정답률 70-80% 목표)',
-    gradeBoost: 0,  // 해당 학년 수준
-    level: '응용',
+    description: "약간의 사고력이 필요한 응용 문제 (정답률 70-80% 목표)",
+    gradeBoost: 0, // 해당 학년 수준
+    level: "응용",
   },
-  '30min': {
-    duration: '30분',
-    complexity: '해당 학년 심화',
+  "30min": {
+    duration: "30분",
+    complexity: "해당 학년 심화",
     steps: 5,
-    description: '여러 단계의 추론이 필요한 심화 문제 (정답률 60-70% 목표)',
-    gradeBoost: 0,  // 해당 학년 심화 수준 (다음 학년 X)
-    level: '심화',
+    description: "여러 단계의 추론이 필요한 심화 문제 (정답률 60-70% 목표)",
+    gradeBoost: 0, // 해당 학년 심화 수준 (다음 학년 X)
+    level: "심화",
   },
-  '1hour': {
-    duration: '1시간',
-    complexity: '해당 학년 최상위 + 다음 학년 맛보기',
+  "1hour": {
+    duration: "1시간",
+    complexity: "해당 학년 최상위 + 다음 학년 맛보기",
     steps: 8,
-    description: '깊이 생각해야 하는 도전 문제, 다음 학년 개념 살짝 노출',
-    gradeBoost: 1,  // 1학년 상위까지 (초6 → 중1 기초)
-    level: '도전',
+    description: "깊이 생각해야 하는 도전 문제, 다음 학년 개념 살짝 노출",
+    gradeBoost: 1, // 1학년 상위까지 (초6 → 중1 기초)
+    level: "도전",
   },
-  '1day': {
-    duration: '하루',
-    complexity: '다음 학년 기초~중간 수준',
+  "1day": {
+    duration: "하루",
+    complexity: "다음 학년 기초~중간 수준",
     steps: 10,
-    description: '하루 동안 고민하며 새로운 개념을 발견하는 문제',
-    gradeBoost: 1,  // 1학년 상위 (탐구하면 도달 가능한 수준)
-    level: '탐구',
+    description: "하루 동안 고민하며 새로운 개념을 발견하는 문제",
+    gradeBoost: 1, // 1학년 상위 (탐구하면 도달 가능한 수준)
+    level: "탐구",
   },
-  '3days': {
-    duration: '3일',
-    complexity: '다음 학년 중간~심화 수준',
+  "3days": {
+    duration: "3일",
+    complexity: "다음 학년 중간~심화 수준",
     steps: 12,
-    description: '며칠간 고민하며 개념을 확장하는 프로젝트 문제',
-    gradeBoost: 1,  // 1학년 상위 심화 (초6 → 중1 심화)
-    level: '프로젝트',
+    description: "며칠간 고민하며 개념을 확장하는 프로젝트 문제",
+    gradeBoost: 1, // 1학년 상위 심화 (초6 → 중1 심화)
+    level: "프로젝트",
   },
-  '7days': {
-    duration: '일주일',
-    complexity: '1~2학년 상위 수준 융합',
+  "7days": {
+    duration: "일주일",
+    complexity: "1~2학년 상위 수준 융합",
     steps: 15,
-    description: '일주일간 여러 개념을 연결하며 탐구하는 문제',
-    gradeBoost: 2,  // 2학년 상위까지 (초6 → 중2 기초)
-    level: '융합탐구',
+    description: "일주일간 여러 개념을 연결하며 탐구하는 문제",
+    gradeBoost: 2, // 2학년 상위까지 (초6 → 중2 기초)
+    level: "융합탐구",
   },
-  '1month': {
-    duration: '한 달',
-    complexity: '2학년 상위 수준 도전',
+  "1month": {
+    duration: "한 달",
+    complexity: "2학년 상위 수준 도전",
     steps: 20,
-    description: '한 달간 깊이 몰입하여 상위 개념을 스스로 발견하는 문제',
-    gradeBoost: 2,  // 2학년 상위까지 (초6 → 중2 수준) - 손 뻗으면 닿는 거리!
-    level: '심층탐구',
+    description: "한 달간 깊이 몰입하여 상위 개념을 스스로 발견하는 문제",
+    gradeBoost: 2, // 2학년 상위까지 (초6 → 중2 수준) - 손 뻗으면 닿는 거리!
+    level: "심층탐구",
   },
 };
 
@@ -729,7 +844,7 @@ export async function generateImmersionProblem(
   grade: number,
   theta: number,
   difficulty: ImmersionDifficulty,
-  preferredTopic?: MathTopic
+  preferredTopic?: MathTopic,
 ): Promise<{
   content: string;
   hints: string[];
@@ -751,13 +866,13 @@ export async function generateImmersionProblem(
 
   // 목표 학년의 교육과정 정보
   const targetCurriculum = CURRICULUM_DB[targetGrade];
-  let topicsList = '';
+  let topicsList = "";
   if (targetCurriculum) {
     const allDomains = [
       ...Object.keys(targetCurriculum.semester1.domains),
       ...Object.keys(targetCurriculum.semester2.domains),
     ];
-    topicsList = allDomains.join(', ');
+    topicsList = allDomains.join(", ");
   }
 
   // 소크라테스 산파법 설명
@@ -772,7 +887,7 @@ export async function generateImmersionProblem(
 `;
 
   // 난이도별 특화 지시사항
-  let difficultySpecificInstructions = '';
+  let difficultySpecificInstructions = "";
 
   if (config.gradeBoost === 0) {
     // 5분, 10분: 해당 학년 수준
@@ -795,7 +910,7 @@ export async function generateImmersionProblem(
 ## 📚 난이도 지침
 - 기본 출발: ${baseGradeLabel} 개념
 - 목표 도달: **${targetGradeLabel} 수준의 심화 문제**
-- ${grade <= 6 ? '중학교' : '고등학교'} 개념을 탐구하는 문제
+- ${grade <= 6 ? "중학교" : "고등학교"} 개념을 탐구하는 문제
 - **경시대회/영재원 입문 수준**
 - 수학적 사고력과 창의성 필요`;
   } else {
@@ -821,12 +936,16 @@ ${difficultySpecificInstructions}
 - 복잡도: ${config.complexity}
 - 풀이 단계: 약 ${config.steps}단계
 
-${targetStandard ? `
+${
+  targetStandard
+    ? `
 ## 📖 참고할 성취기준 (${targetGradeLabel}):
 - 코드: ${targetStandard.code}
 - 내용: ${targetStandard.description}
-- 키워드: ${targetStandard.keywords.join(', ')}
-` : ''}
+- 키워드: ${targetStandard.keywords.join(", ")}
+`
+    : ""
+}
 
 ## 🎓 ${targetGradeLabel}에서 다루는 영역:
 ${topicsList}
@@ -837,7 +956,7 @@ ${socraticMethod}
 1. ${config.duration} 동안 **깊이 몰두**할 수 있는 문제여야 합니다
 2. 단순 계산 문제 금지! **사고력, 창의력, 문제해결력** 필요
 3. 힌트는 **소크라테스 산파법**으로: 질문을 통해 스스로 발견하게 유도
-4. ${config.gradeBoost > 0 ? `상위 개념(${targetGradeLabel})을 **탐구하는 기회**로 설계` : '해당 학년 범위 내에서 도전적으로'}
+4. ${config.gradeBoost > 0 ? `상위 개념(${targetGradeLabel})을 **탐구하는 기회**로 설계` : "해당 학년 범위 내에서 도전적으로"}
 5. 아름답고 우아한 풀이가 존재하는 문제 선호
 
 ## 📝 용어 설명 필수! (매우 중요)
@@ -875,7 +994,7 @@ JSON만 반환해주세요.`;
 
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      throw new Error('Failed to parse response');
+      throw new Error("Failed to parse response");
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
@@ -884,14 +1003,19 @@ JSON만 반환해주세요.`;
       content: parsed.content,
       hints: parsed.hints || [],
       solution: parsed.solution,
-      topic: parsed.topic || targetStandard?.description || `${config.level} 수학`,
+      topic:
+        parsed.topic || targetStandard?.description || `${config.level} 수학`,
       estimatedTime: config.duration,
     };
   } catch (error) {
-    console.error('Error generating immersion problem:', error);
+    console.error("Error generating immersion problem:", error);
 
     // 폴백 문제 (난이도별 적절한 수준)
-    return generateFallbackImmersionProblem(grade, difficulty, targetStandard?.description || '수학');
+    return generateFallbackImmersionProblem(
+      grade,
+      difficulty,
+      targetStandard?.description || "수학",
+    );
   }
 }
 
@@ -907,7 +1031,7 @@ JSON만 반환해주세요.`;
 function generateFallbackImmersionProblem(
   grade: number,
   difficulty: ImmersionDifficulty,
-  topic: string
+  topic: string,
 ): {
   content: string;
   hints: string[];
@@ -926,17 +1050,20 @@ function generateFallbackImmersionProblem(
   // ============================================================
 
   // 기초 문제 (5min, 10min) - 해당 학년 수준
-  const basicProblems: Record<number, { content: string; hints: string[]; solution: string }[]> = {
+  const basicProblems: Record<
+    number,
+    { content: string; hints: string[]; solution: string }[]
+  > = {
     6: [
       {
         content: `어떤 물건의 정가가 10,000원입니다. 이 물건을 20% 할인해서 팔았습니다.
 
 **질문**: 할인된 가격은 얼마인가요?`,
         hints: [
-          '20%는 전체의 얼마일까요? 100% 중 20%를 생각해보세요.',
-          '20% = 20/100 = 0.2 또는 1/5 이에요.',
-          '할인 금액 = 정가 × 할인율',
-          '할인된 가격 = 정가 - 할인 금액'
+          "20%는 전체의 얼마일까요? 100% 중 20%를 생각해보세요.",
+          "20% = 20/100 = 0.2 또는 1/5 이에요.",
+          "할인 금액 = 정가 × 할인율",
+          "할인된 가격 = 정가 - 할인 금액",
         ],
         solution: `할인 금액 = 10,000 × 0.2 = 2,000원
 할인된 가격 = 10,000 - 2,000 = 8,000원
@@ -949,16 +1076,16 @@ function generateFallbackImmersionProblem(
 
 **질문**: 안경을 쓴 학생은 전체의 몇 %인가요?`,
         hints: [
-          '비율 = 부분/전체',
-          '12/30을 계산해보세요',
-          '분수를 소수로 바꾸면?',
-          '소수에 100을 곱하면 퍼센트!'
+          "비율 = 부분/전체",
+          "12/30을 계산해보세요",
+          "분수를 소수로 바꾸면?",
+          "소수에 100을 곱하면 퍼센트!",
         ],
         solution: `비율 = 12/30 = 2/5 = 0.4
 퍼센트 = 0.4 × 100 = 40%
 
 답: 40%`,
-      }
+      },
     ],
     7: [
       {
@@ -970,17 +1097,17 @@ function generateFallbackImmersionProblem(
 
 이것을 '방정식'으로 쓰면: x + 5 = -3`,
         hints: [
-          '어떤 수를 x라고 하면, x + 5 = -3',
-          '양쪽에서 5를 빼면 x만 남아요',
-          'x = -3 - 5',
-          '음수끼리 빼면? -3 - 5 = -8'
+          "어떤 수를 x라고 하면, x + 5 = -3",
+          "양쪽에서 5를 빼면 x만 남아요",
+          "x = -3 - 5",
+          "음수끼리 빼면? -3 - 5 = -8",
         ],
         solution: `x + 5 = -3
 x = -3 - 5
 x = -8
 
 검산: -8 + 5 = -3 ✓`,
-      }
+      },
     ],
     8: [
       {
@@ -994,10 +1121,10 @@ x = -8
 
 (힌트: 사과 가격을 x원, 배 가격을 y원이라 하면...)`,
         hints: [
-          '2x + y = 1100 (사과 2개 + 배 1개)',
-          'x + 2y = 1300 (사과 1개 + 배 2개)',
-          '첫 번째 식에서 y = 1100 - 2x',
-          '이것을 두 번째 식에 대입해보세요'
+          "2x + y = 1100 (사과 2개 + 배 1개)",
+          "x + 2y = 1300 (사과 1개 + 배 2개)",
+          "첫 번째 식에서 y = 1100 - 2x",
+          "이것을 두 번째 식에 대입해보세요",
         ],
         solution: `2x + y = 1100 ... ①
 x + 2y = 1300 ... ②
@@ -1014,12 +1141,15 @@ y = 1100 - 2(300) = 500
 
 검산: 2(300) + 500 = 1100 ✓
      300 + 2(500) = 1300 ✓`,
-      }
-    ]
+      },
+    ],
   };
 
   // 심화 문제 (30min) - 해당 학년 도전
-  const deeperProblems: Record<number, { content: string; hints: string[]; solution: string }[]> = {
+  const deeperProblems: Record<
+    number,
+    { content: string; hints: string[]; solution: string }[]
+  > = {
     6: [
       {
         content: `**[도전 문제]**
@@ -1029,10 +1159,10 @@ y = 1100 - 2(300) = 500
 
 (힌트: 거꾸로 생각해보세요!)`,
         hints: [
-          '20% 할인했다는 것은 정가의 80%를 받았다는 뜻이에요',
-          '정가 × 0.8 = 4,800',
-          '정가를 구하려면 4,800을 0.8로 나누면 돼요',
-          '4,800 ÷ 0.8 = ?'
+          "20% 할인했다는 것은 정가의 80%를 받았다는 뜻이에요",
+          "정가 × 0.8 = 4,800",
+          "정가를 구하려면 4,800을 0.8로 나누면 돼요",
+          "4,800 ÷ 0.8 = ?",
         ],
         solution: `20% 할인 → 정가의 80% = 판매가
 
@@ -1050,10 +1180,10 @@ y = 1100 - 2(300) = 500
 1. 최종 가격은 정가의 몇 %인가요?
 2. 왜 30% 할인이 아닐까요? 설명해보세요.`,
         hints: [
-          '첫 번째 할인 후: 정가 × 0.8',
+          "첫 번째 할인 후: 정가 × 0.8",
           '두 번째 할인은 "할인된 가격"의 10%를 빼는 거예요',
-          '(정가 × 0.8) × 0.9 = ?',
-          '0.8 × 0.9를 계산해보세요'
+          "(정가 × 0.8) × 0.9 = ?",
+          "0.8 × 0.9를 계산해보세요",
         ],
         solution: `1단계: 20% 할인 → 정가의 80% = 정가 × 0.8
 2단계: 추가 10% 할인 → (정가 × 0.8) × 0.9
@@ -1065,7 +1195,7 @@ y = 1100 - 2(300) = 500
 왜 30%가 아닐까?
 - 두 번째 할인은 "정가"가 아니라 "이미 할인된 가격"에서 10%를 빼기 때문!
 - 8,000원의 10%와 10,000원의 10%는 다르죠!`,
-      }
+      },
     ],
     7: [
       {
@@ -1077,10 +1207,10 @@ y = 1100 - 2(300) = 500
 3년 후에는 형의 나이가 동생 나이의 2배보다 1살 적습니다.
 현재 형과 동생의 나이는?`,
         hints: [
-          '동생의 현재 나이를 x살이라 하면, 형은 (x+5)살',
-          '3년 후: 동생 (x+3)살, 형 (x+8)살',
-          '3년 후 조건: x + 8 = 2(x + 3) - 1',
-          '방정식을 풀어보세요!'
+          "동생의 현재 나이를 x살이라 하면, 형은 (x+5)살",
+          "3년 후: 동생 (x+3)살, 형 (x+8)살",
+          "3년 후 조건: x + 8 = 2(x + 3) - 1",
+          "방정식을 풀어보세요!",
         ],
         solution: `동생 현재 나이: x살
 형 현재 나이: (x + 5)살
@@ -1100,12 +1230,15 @@ x = 3
 
 검산: 3년 후 → 동생 6살, 형 11살
 11 = 2 × 6 - 1 = 11 ✓`,
-      }
-    ]
+      },
+    ],
   };
 
   // 도전 문제 (1hour) - 다음 학년 맛보기
-  const challengeProblems: Record<number, { content: string; hints: string[]; solution: string }[]> = {
+  const challengeProblems: Record<
+    number,
+    { content: string; hints: string[]; solution: string }[]
+  > = {
     6: [
       {
         content: `**[다음 학년 미리보기 - 음수와 방정식]**
@@ -1121,10 +1254,10 @@ x = 3
 
 더 생각해보기: 저녁에 낮보다 10°C 내려갔다면, 저녁 기온은?`,
         hints: [
-          '-3에서 8만큼 올라간다는 것은 -3 + 8',
-          '음수 + 양수: 수직선에서 생각해보세요',
-          '-3에서 오른쪽으로 8칸 이동',
-          '저녁 기온: 낮 기온 - 10'
+          "-3에서 8만큼 올라간다는 것은 -3 + 8",
+          "음수 + 양수: 수직선에서 생각해보세요",
+          "-3에서 오른쪽으로 8칸 이동",
+          "저녁 기온: 낮 기온 - 10",
         ],
         solution: `낮 기온 = -3 + 8 = 5°C
 
@@ -1149,10 +1282,10 @@ x = 3
 
 (힌트: 어떤 수를 □라 하면, □ × 3 - 7 = 20)`,
         hints: [
-          '□ × 3 - 7 = 20',
-          '양쪽에 7을 더하면: □ × 3 = 27',
-          '양쪽을 3으로 나누면: □ = 9',
-          '검산: 9 × 3 - 7 = 27 - 7 = 20 ✓'
+          "□ × 3 - 7 = 20",
+          "양쪽에 7을 더하면: □ × 3 = 27",
+          "양쪽을 3으로 나누면: □ = 9",
+          "검산: 9 × 3 - 7 = 27 - 7 = 20 ✓",
         ],
         solution: `어떤 수를 □라 하면:
 □ × 3 - 7 = 20
@@ -1164,7 +1297,7 @@ x = 3
 검산: 9 × 3 - 7 = 27 - 7 = 20 ✓
 
 답: 9`,
-      }
+      },
     ],
     7: [
       {
@@ -1179,10 +1312,10 @@ x = 3
 
 연필 1자루와 지우개 1개의 가격은 각각 얼마인가요?`,
         hints: [
-          '연필 가격을 x원, 지우개 가격을 y원이라 하면',
-          '3x + 2y = 1100',
-          '2x + 3y = 1150',
-          '두 식을 빼거나 더해서 문자 하나를 없애보세요'
+          "연필 가격을 x원, 지우개 가격을 y원이라 하면",
+          "3x + 2y = 1100",
+          "2x + 3y = 1150",
+          "두 식을 빼거나 더해서 문자 하나를 없애보세요",
         ],
         solution: `3x + 2y = 1100 ... ①
 2x + 3y = 1150 ... ②
@@ -1198,12 +1331,15 @@ x = 3
 y = 250
 
 답: 연필 200원, 지우개 250원`,
-      }
-    ]
+      },
+    ],
   };
 
   // 탐구 문제 (1day, 3days) - 다음 학년 개념 탐구
-  const explorationProblems: Record<number, { content: string; hints: string[]; solution: string }[]> = {
+  const explorationProblems: Record<
+    number,
+    { content: string; hints: string[]; solution: string }[]
+  > = {
     6: [
       {
         content: `**[탐구 과제 - 규칙 발견하기]**
@@ -1222,10 +1358,10 @@ y = 250
 3. 1부터 시작하는 연속 홀수 10개의 합은 얼마일까요?
 4. 왜 이런 규칙이 성립할까요? (그림으로 설명해보세요!)`,
         hints: [
-          '결과가 1, 4, 9, 16, ... 이네요. 뭔가 보이나요?',
-          '1 = 1², 4 = 2², 9 = 3², 16 = 4²',
-          '연속 홀수 n개의 합 = n²',
-          '정사각형 모양으로 점을 찍어보세요!'
+          "결과가 1, 4, 9, 16, ... 이네요. 뭔가 보이나요?",
+          "1 = 1², 4 = 2², 9 = 3², 16 = 4²",
+          "연속 홀수 n개의 합 = n²",
+          "정사각형 모양으로 점을 찍어보세요!",
         ],
         solution: `1 + 3 + 5 + 7 + 9 = 25 = 5²
 
@@ -1255,10 +1391,10 @@ y = 250
 **더 탐구해보기**:
 둘레가 같은 직사각형 중에서 어떤 비율일 때 넓이가 가장 클까요?`,
         hints: [
-          '가로:세로 = 3:2 → 가로 = 3k, 세로 = 2k (k는 비례상수)',
-          '둘레 = 2(가로 + 세로) = 2(3k + 2k) = 10k',
-          '10k = 50 → k = 5',
-          '가로 = 15cm, 세로 = 10cm'
+          "가로:세로 = 3:2 → 가로 = 3k, 세로 = 2k (k는 비례상수)",
+          "둘레 = 2(가로 + 세로) = 2(3k + 2k) = 10k",
+          "10k = 50 → k = 5",
+          "가로 = 15cm, 세로 = 10cm",
         ],
         solution: `가로 = 3k, 세로 = 2k라 하면
 
@@ -1275,7 +1411,7 @@ k = 5
 - 1:1 비율(정사각형) → 12.5×12.5 = 156.25cm²
 
 정사각형일 때 넓이가 가장 크다!`,
-      }
+      },
     ],
     7: [
       {
@@ -1290,10 +1426,10 @@ k = 5
 
 **탐구**: 점 C를 움직여서 넓이가 12가 되게 하려면 C의 y좌표는 얼마여야 할까요?`,
         hints: [
-          'A, B는 x축 위에 있어서 밑변 AB = 4',
-          '높이는 C에서 x축까지의 거리 = C의 y좌표 = 3',
-          '삼각형 넓이 = 밑변 × 높이 ÷ 2',
-          '넓이가 12가 되려면: 4 × h ÷ 2 = 12'
+          "A, B는 x축 위에 있어서 밑변 AB = 4",
+          "높이는 C에서 x축까지의 거리 = C의 y좌표 = 3",
+          "삼각형 넓이 = 밑변 × 높이 ÷ 2",
+          "넓이가 12가 되려면: 4 × h ÷ 2 = 12",
         ],
         solution: `밑변 AB = 4 (A에서 B까지 거리)
 높이 = 3 (C의 y좌표)
@@ -1307,12 +1443,15 @@ h = 6
 
 C의 y좌표가 6이면 넓이가 12가 됩니다.
 예: C(2, 6)`,
-      }
-    ]
+      },
+    ],
   };
 
   // 융합탐구 문제 (7days, 1month) - 1~2학년 상위 개념 연결
-  const advancedExplorationProblems: Record<number, { content: string; hints: string[]; solution: string }[]> = {
+  const advancedExplorationProblems: Record<
+    number,
+    { content: string; hints: string[]; solution: string }[]
+  > = {
     6: [
       {
         content: `**[융합 탐구 - 규칙과 식]**
@@ -1331,10 +1470,10 @@ C의 y좌표가 6이면 넓이가 12가 됩니다.
 2. 정사각형 n개를 만들 때 필요한 성냥개비 수를 n으로 나타내보세요.
 3. 성냥개비 100개로 정사각형을 몇 개 만들 수 있을까요?`,
         hints: [
-          '1개: 4, 2개: 7, 3개: 10 → 3씩 증가',
-          '처음 4개 + 추가할 때마다 3개',
-          '정사각형 n개 → 4 + 3(n-1) = 3n + 1',
-          '3n + 1 = 100 → n = ?'
+          "1개: 4, 2개: 7, 3개: 10 → 3씩 증가",
+          "처음 4개 + 추가할 때마다 3개",
+          "정사각형 n개 → 4 + 3(n-1) = 3n + 1",
+          "3n + 1 = 100 → n = ?",
         ],
         solution: `규칙 발견:
 1개: 4 = 4
@@ -1365,10 +1504,10 @@ n개: 4 + 3(n-1) = 3n + 1
 2. A와 B를 섞으면 농도는 얼마가 될까요?
 3. (심화) 농도 15%의 소금물을 만들려면 A와 B를 어떤 비율로 섞어야 할까요?`,
         hints: [
-          '농도(%) = 소금 ÷ (소금 + 물) × 100',
-          'A: 30/(30+270) × 100, B: 40/(40+160) × 100',
-          '섞으면: (30+40)/(300+200) × 100',
-          '심화: A를 x g, B를 y g 섞는다 하면...'
+          "농도(%) = 소금 ÷ (소금 + 물) × 100",
+          "A: 30/(30+270) × 100, B: 40/(40+160) × 100",
+          "섞으면: (30+40)/(300+200) × 100",
+          "심화: A를 x g, B를 y g 섞는다 하면...",
         ],
         solution: `1) 농도 계산
 A: 30/300 × 100 = 10%
@@ -1389,7 +1528,7 @@ x = y
 → A와 B를 1:1 비율로 섞으면 15%!
 
 검산: (0.1×100 + 0.2×100)/200 = 30/200 = 0.15 ✓`,
-      }
+      },
     ],
     7: [
       {
@@ -1409,10 +1548,10 @@ x = y
 2. 몇 분 이상 통화하면 B요금제가 유리할까요?
 3. 두 요금이 같아지는 통화 시간은?`,
         hints: [
-          'A요금: 10000 + 50x, B요금: 15000 + 30x',
-          'B가 유리 → B요금 < A요금',
-          '15000 + 30x < 10000 + 50x',
-          '두 요금이 같을 때: 10000 + 50x = 15000 + 30x'
+          "A요금: 10000 + 50x, B요금: 15000 + 30x",
+          "B가 유리 → B요금 < A요금",
+          "15000 + 30x < 10000 + 50x",
+          "두 요금이 같을 때: 10000 + 50x = 15000 + 30x",
         ],
         solution: `1) A요금 = 10000 + 50x (원)
    B요금 = 15000 + 30x (원)
@@ -1432,8 +1571,8 @@ x = y
 
 검산: A: 10000 + 50×250 = 22500
      B: 15000 + 30×250 = 22500 ✓`,
-      }
-    ]
+      },
+    ],
   };
 
   // 난이도에 따른 문제 선택 (황농문 이론 기반)
@@ -1444,23 +1583,28 @@ x = y
   const gradeDeeper = deeperProblems[grade] || deeperProblems[6];
   const gradeChallenge = challengeProblems[grade] || challengeProblems[6];
   const gradeExploration = explorationProblems[grade] || explorationProblems[6];
-  const gradeAdvanced = advancedExplorationProblems[grade] || advancedExplorationProblems[6];
+  const gradeAdvanced =
+    advancedExplorationProblems[grade] || advancedExplorationProblems[6];
 
-  if (difficulty === '5min' || difficulty === '10min') {
+  if (difficulty === "5min" || difficulty === "10min") {
     // 기초: 해당 학년 수준 (성공 경험 축적)
     selectedProblem = gradeBasic[Math.floor(Math.random() * gradeBasic.length)];
-  } else if (difficulty === '30min') {
+  } else if (difficulty === "30min") {
     // 심화: 해당 학년 도전
-    selectedProblem = gradeDeeper[Math.floor(Math.random() * gradeDeeper.length)];
-  } else if (difficulty === '1hour') {
+    selectedProblem =
+      gradeDeeper[Math.floor(Math.random() * gradeDeeper.length)];
+  } else if (difficulty === "1hour") {
     // 도전: 다음 학년 맛보기
-    selectedProblem = gradeChallenge[Math.floor(Math.random() * gradeChallenge.length)];
-  } else if (difficulty === '1day' || difficulty === '3days') {
+    selectedProblem =
+      gradeChallenge[Math.floor(Math.random() * gradeChallenge.length)];
+  } else if (difficulty === "1day" || difficulty === "3days") {
     // 탐구: 다음 학년 개념 탐구
-    selectedProblem = gradeExploration[Math.floor(Math.random() * gradeExploration.length)];
+    selectedProblem =
+      gradeExploration[Math.floor(Math.random() * gradeExploration.length)];
   } else {
     // 7days, 1month: 융합 탐구 (1~2학년 상위)
-    selectedProblem = gradeAdvanced[Math.floor(Math.random() * gradeAdvanced.length)];
+    selectedProblem =
+      gradeAdvanced[Math.floor(Math.random() * gradeAdvanced.length)];
   }
 
   return {

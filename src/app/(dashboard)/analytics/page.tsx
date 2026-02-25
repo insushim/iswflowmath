@@ -1,17 +1,16 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth } from '@/lib/firebase/config';
-import { getUserSessions, getUserDailyStats } from '@/lib/firebase/firestore';
-import { getStreakStats } from '@/lib/gamification/streak';
-import { calculateLevel, getLevelTitle } from '@/lib/gamification/constants';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase/config';
-import { MathTopic, MATH_TOPICS } from '@/types';
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { onAuthStateChanged, User } from "firebase/auth";
+import { auth } from "@/lib/firebase/config";
+import { api } from "@/lib/api/client";
+import { getUserSessions, getUserDailyStats } from "@/lib/firebase/firestore";
+import { getStreakStats } from "@/lib/gamification/streak";
+import { calculateLevel, getLevelTitle } from "@/lib/gamification/constants";
+import { MathTopic, MATH_TOPICS } from "@/types";
 import {
   BarChart3,
   TrendingUp,
@@ -24,7 +23,7 @@ import {
   Calendar,
   ChevronRight,
   Sparkles,
-} from 'lucide-react';
+} from "lucide-react";
 
 // 타입 정의
 interface UserAnalyticsData {
@@ -81,7 +80,7 @@ const containerVariants = {
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
 };
 
 // 로딩 스켈레톤 컴포넌트
@@ -140,8 +139,12 @@ function GlassStatCard({
       whileHover={{ y: -4, transition: { duration: 0.2 } }}
       className="group relative"
     >
-      <div className={`absolute inset-0 ${gradient} rounded-3xl opacity-80 blur-xl group-hover:blur-2xl transition-all duration-500`} />
-      <div className={`relative overflow-hidden rounded-3xl ${gradient} p-6 shadow-2xl`}>
+      <div
+        className={`absolute inset-0 ${gradient} rounded-3xl opacity-80 blur-xl group-hover:blur-2xl transition-all duration-500`}
+      />
+      <div
+        className={`relative overflow-hidden rounded-3xl ${gradient} p-6 shadow-2xl`}
+      >
         {/* 글래스 오버레이 */}
         <div className="absolute inset-0 bg-gradient-to-br from-white/25 via-white/5 to-transparent" />
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent" />
@@ -151,11 +154,15 @@ function GlassStatCard({
         <div className="absolute -bottom-8 -left-8 w-24 h-24 bg-white/5 rounded-full blur-xl" />
 
         <div className="relative z-10">
-          <div className={`inline-flex p-2.5 rounded-2xl ${iconGradient} shadow-lg mb-4`}>
+          <div
+            className={`inline-flex p-2.5 rounded-2xl ${iconGradient} shadow-lg mb-4`}
+          >
             <Icon className="w-5 h-5 text-white" />
           </div>
           <div className="text-white/80 text-sm font-medium mb-1">{label}</div>
-          <div className="text-4xl font-bold text-white tracking-tight mb-1">{value}</div>
+          <div className="text-4xl font-bold text-white tracking-tight mb-1">
+            {value}
+          </div>
           {subValue && (
             <div className="text-white/60 text-sm font-medium">{subValue}</div>
           )}
@@ -168,7 +175,7 @@ function GlassStatCard({
 // Bento 스타일 카드
 function BentoCard({
   children,
-  className = '',
+  className = "",
   delay = 0,
 }: {
   children: React.ReactNode;
@@ -200,7 +207,7 @@ export default function AnalyticsPage() {
     });
     return () => unsubscribe();
   }, []);
-  const [timeRange, setTimeRange] = useState<'week' | 'month' | 'all'>('week');
+  const [timeRange, setTimeRange] = useState<"week" | "month" | "all">("week");
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<UserAnalyticsData | null>(null);
   const [weeklyData, setWeeklyData] = useState<WeeklyData[]>([]);
@@ -210,32 +217,48 @@ export default function AnalyticsPage() {
   // 데이터 로드
   useEffect(() => {
     async function loadAnalyticsData() {
-      if (authLoading || !user?.uid) { if (!authLoading && !user) { setLoading(false); } return; }
+      if (authLoading || !user?.uid) {
+        if (!authLoading && !user) {
+          setLoading(false);
+        }
+        return;
+      }
 
       setLoading(true);
       try {
-        // 사용자 기본 데이터
-        const userRef = doc(db, 'users', user.uid);
-        const userDoc = await getDoc(userRef);
-        const userData = userDoc.exists() ? userDoc.data() : {};
+        // 사용자 기본 데이터 (API 호출)
+        const userResult = await api.getUser();
+        const userData = userResult?.user
+          ? { totalXp: userResult.user.total_xp || 0 }
+          : {};
 
         // 스트릭 통계
         const streakStats = await getStreakStats(user.uid);
 
         // 일별 통계 (시간 범위에 따라)
-        const days = timeRange === 'week' ? 7 : timeRange === 'month' ? 30 : 365;
+        const days =
+          timeRange === "week" ? 7 : timeRange === "month" ? 30 : 365;
         const dailyStats = await getUserDailyStats(user.uid, days);
 
         // 최근 세션
         const sessions = await getUserSessions(user.uid, 10);
 
         // 통계 계산
-        const totalProblems = dailyStats.reduce((sum: number, d: any) => sum + (d.problemsSolved || 0), 0);
-        const correctProblems = dailyStats.reduce((sum: number, d: any) => sum + (d.problemsCorrect || 0), 0);
-        const totalTime = dailyStats.reduce((sum: number, d: any) => sum + (d.timeSpentMinutes || 0), 0);
+        const totalProblems = dailyStats.reduce(
+          (sum: number, d: any) => sum + (d.problemsSolved || 0),
+          0,
+        );
+        const correctProblems = dailyStats.reduce(
+          (sum: number, d: any) => sum + (d.problemsCorrect || 0),
+          0,
+        );
+        const totalTime = dailyStats.reduce(
+          (sum: number, d: any) => sum + (d.timeSpentMinutes || 0),
+          0,
+        );
         const totalFlowTime = dailyStats.reduce((sum: number, d: any) => {
           const flowPct = d.flowPercentage || 50;
-          return sum + ((d.timeSpentMinutes || 0) * flowPct / 100);
+          return sum + ((d.timeSpentMinutes || 0) * flowPct) / 100;
         }, 0);
 
         const totalXp = userData.totalXp || 0;
@@ -244,12 +267,19 @@ export default function AnalyticsPage() {
         setStats({
           totalProblems,
           correctProblems,
-          accuracyRate: totalProblems > 0 ? Math.round((correctProblems / totalProblems) * 1000) / 10 : 0,
+          accuracyRate:
+            totalProblems > 0
+              ? Math.round((correctProblems / totalProblems) * 1000) / 10
+              : 0,
           totalTimeMinutes: totalTime,
-          avgTimePerProblem: totalProblems > 0 ? Math.round((totalTime * 60) / totalProblems) : 0,
+          avgTimePerProblem:
+            totalProblems > 0
+              ? Math.round((totalTime * 60) / totalProblems)
+              : 0,
           streakDays: streakStats.currentStreak,
           longestStreak: streakStats.longestStreak,
-          flowTimePercentage: totalTime > 0 ? Math.round((totalFlowTime / totalTime) * 100) : 0,
+          flowTimePercentage:
+            totalTime > 0 ? Math.round((totalFlowTime / totalTime) * 100) : 0,
           currentLevel: levelData.level,
           totalXp,
           xpToNextLevel: levelData.xpToNext,
@@ -257,37 +287,49 @@ export default function AnalyticsPage() {
         });
 
         // 주간 데이터 생성
-        const weekDays = ['일', '월', '화', '수', '목', '금', '토'];
+        const weekDays = ["일", "월", "화", "수", "목", "금", "토"];
         const last7Days: WeeklyData[] = [];
         for (let i = 6; i >= 0; i--) {
           const date = new Date();
           date.setDate(date.getDate() - i);
-          const dateStr = date.toISOString().split('T')[0];
-          const dayData = dailyStats.find((d: any) => d.date === dateStr) as any;
+          const dateStr = date.toISOString().split("T")[0];
+          const dayData = dailyStats.find(
+            (d: any) => d.date === dateStr,
+          ) as any;
 
           last7Days.push({
             day: weekDays[date.getDay()],
             date: dateStr,
             problems: dayData?.problemsSolved || 0,
             minutes: dayData?.timeSpentMinutes || 0,
-            accuracy: dayData?.problemsSolved > 0
-              ? Math.round((dayData.problemsCorrect / dayData.problemsSolved) * 100)
-              : 0,
+            accuracy:
+              dayData?.problemsSolved > 0
+                ? Math.round(
+                    (dayData.problemsCorrect / dayData.problemsSolved) * 100,
+                  )
+                : 0,
             xp: dayData?.xpEarned || 0,
           });
         }
         setWeeklyData(last7Days);
 
         // 주제별 숙련도 계산
-        const topicStats: Record<string, { problems: number; correct: number }> = {};
+        const topicStats: Record<
+          string,
+          { problems: number; correct: number }
+        > = {};
         dailyStats.forEach((day: any) => {
           const topics = day.topicsPracticed || [];
           topics.forEach((topic: string) => {
             if (!topicStats[topic]) {
               topicStats[topic] = { problems: 0, correct: 0 };
             }
-            const perTopic = Math.ceil((day.problemsSolved || 0) / topics.length);
-            const correctPerTopic = Math.ceil((day.problemsCorrect || 0) / topics.length);
+            const perTopic = Math.ceil(
+              (day.problemsSolved || 0) / topics.length,
+            );
+            const correctPerTopic = Math.ceil(
+              (day.problemsCorrect || 0) / topics.length,
+            );
             topicStats[topic].problems += perTopic;
             topicStats[topic].correct += correctPerTopic;
           });
@@ -297,7 +339,10 @@ export default function AnalyticsPage() {
           .map(([topic, data]) => ({
             topic: MATH_TOPICS[topic as MathTopic] || topic,
             topicKey: topic as MathTopic,
-            mastery: data.problems > 0 ? Math.round((data.correct / data.problems) * 100) : 0,
+            mastery:
+              data.problems > 0
+                ? Math.round((data.correct / data.problems) * 100)
+                : 0,
             problems: data.problems,
             correct: data.correct,
           }))
@@ -307,26 +352,33 @@ export default function AnalyticsPage() {
         setTopicMastery(masteryData);
 
         // 최근 세션 매핑
-        const recentSessionData: RecentSession[] = sessions.slice(0, 5).map((session: any) => {
-          const startedAt = session.startedAt?.toDate?.() || new Date(session.startedAt);
-          const endedAt = session.endedAt?.toDate?.() || new Date();
-          const duration = Math.round((endedAt.getTime() - startedAt.getTime()) / 60000);
+        const recentSessionData: RecentSession[] = sessions
+          .slice(0, 5)
+          .map((session: any) => {
+            const startedAt =
+              session.startedAt?.toDate?.() || new Date(session.startedAt);
+            const endedAt = session.endedAt?.toDate?.() || new Date();
+            const duration = Math.round(
+              (endedAt.getTime() - startedAt.getTime()) / 60000,
+            );
 
-          return {
-            id: session.id,
-            date: startedAt.toISOString().split('T')[0],
-            duration: duration > 0 ? duration : 1,
-            problems: session.problemsAttempted || 0,
-            correct: session.problemsCorrect || 0,
-            xp: session.xpEarned || 0,
-            flowPercent: session.flowPercentage || 50,
-            topic: MATH_TOPICS[session.topic as MathTopic] || session.topic || '일반',
-          };
-        });
+            return {
+              id: session.id,
+              date: startedAt.toISOString().split("T")[0],
+              duration: duration > 0 ? duration : 1,
+              problems: session.problemsAttempted || 0,
+              correct: session.problemsCorrect || 0,
+              xp: session.xpEarned || 0,
+              flowPercent: session.flowPercentage || 50,
+              topic:
+                MATH_TOPICS[session.topic as MathTopic] ||
+                session.topic ||
+                "일반",
+            };
+          });
         setRecentSessions(recentSessionData);
-
       } catch (error) {
-        console.error('Failed to load analytics data:', error);
+        console.error("Failed to load analytics data:", error);
       } finally {
         setLoading(false);
       }
@@ -358,7 +410,10 @@ export default function AnalyticsPage() {
       {/* 배경 블러 오브 */}
       <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
         <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-gradient-to-br from-indigo-500/10 to-violet-500/10 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-gradient-to-br from-violet-500/10 to-purple-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+        <div
+          className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-gradient-to-br from-violet-500/10 to-purple-500/10 rounded-full blur-3xl animate-pulse"
+          style={{ animationDelay: "1s" }}
+        />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-to-br from-indigo-500/5 to-blue-500/5 rounded-full blur-3xl" />
       </div>
 
@@ -379,15 +434,17 @@ export default function AnalyticsPage() {
                 학습 통계
               </h1>
             </div>
-            <p className="text-slate-400 ml-14">학습 진행 상황과 성과를 한눈에 확인하세요</p>
+            <p className="text-slate-400 ml-14">
+              학습 진행 상황과 성과를 한눈에 확인하세요
+            </p>
           </div>
 
           {/* 기간 선택 - 글래스모피즘 */}
           <div className="flex gap-1.5 p-1.5 bg-slate-800/60 backdrop-blur-xl rounded-2xl shadow-lg shadow-black/20 border border-white/10">
             {[
-              { value: 'week', label: '이번 주', icon: Calendar },
-              { value: 'month', label: '이번 달', icon: Calendar },
-              { value: 'all', label: '전체', icon: Calendar },
+              { value: "week", label: "이번 주", icon: Calendar },
+              { value: "month", label: "이번 달", icon: Calendar },
+              { value: "all", label: "전체", icon: Calendar },
             ].map((option) => (
               <motion.button
                 key={option.value}
@@ -396,8 +453,8 @@ export default function AnalyticsPage() {
                 whileTap={{ scale: 0.98 }}
                 className={`px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 ${
                   timeRange === option.value
-                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30'
-                    : 'text-slate-400 hover:bg-white/10'
+                    ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30"
+                    : "text-slate-400 hover:bg-white/10"
                 }`}
               >
                 {option.label}
@@ -408,7 +465,7 @@ export default function AnalyticsPage() {
 
         {/* 주요 통계 카드 - Bento Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5 mb-8">
-          {(loading || authLoading) ? (
+          {loading || authLoading ? (
             <>
               <StatCardSkeleton />
               <StatCardSkeleton />
@@ -421,7 +478,13 @@ export default function AnalyticsPage() {
                 icon={BookOpen}
                 label="총 문제 수"
                 value={formatNumber(stats?.totalProblems || 0)}
-                subValue={timeRange === 'week' ? '이번 주' : timeRange === 'month' ? '이번 달' : '전체 기간'}
+                subValue={
+                  timeRange === "week"
+                    ? "이번 주"
+                    : timeRange === "month"
+                      ? "이번 달"
+                      : "전체 기간"
+                }
                 gradient="bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600"
                 iconGradient="bg-white/20"
                 delay={0}
@@ -468,8 +531,12 @@ export default function AnalyticsPage() {
                     <TrendingUp className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-white">주간 학습 현황</h3>
-                    <p className="text-sm text-slate-400">최근 7일간의 학습 기록</p>
+                    <h3 className="text-lg font-semibold text-white">
+                      주간 학습 현황
+                    </h3>
+                    <p className="text-sm text-slate-400">
+                      최근 7일간의 학습 기록
+                    </p>
                   </div>
                 </div>
                 <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
@@ -477,26 +544,33 @@ export default function AnalyticsPage() {
                 </Badge>
               </div>
 
-              {(loading || authLoading) ? (
+              {loading || authLoading ? (
                 <ChartSkeleton />
               ) : (
                 <>
                   <div className="flex items-end justify-between h-56 gap-3 px-2">
                     {weeklyData.map((data, index) => {
-                      const height = maxProblems > 0 ? (data.problems / maxProblems) * 100 : 0;
+                      const height =
+                        maxProblems > 0
+                          ? (data.problems / maxProblems) * 100
+                          : 0;
                       const isToday = index === weeklyData.length - 1;
 
                       return (
                         <motion.div
                           key={data.day}
                           initial={{ height: 0 }}
-                          animate={{ height: 'auto' }}
+                          animate={{ height: "auto" }}
                           className="flex-1 flex flex-col items-center group cursor-pointer"
                         >
                           {/* 호버 툴팁 */}
                           <div className="opacity-0 group-hover:opacity-100 transition-all duration-300 mb-2 px-3 py-2 bg-slate-900 text-white text-xs rounded-xl whitespace-nowrap shadow-xl transform group-hover:-translate-y-1">
-                            <div className="font-semibold">{data.problems}문제</div>
-                            <div className="text-slate-400">{data.minutes}분 · {data.accuracy}%</div>
+                            <div className="font-semibold">
+                              {data.problems}문제
+                            </div>
+                            <div className="text-slate-400">
+                              {data.minutes}분 · {data.accuracy}%
+                            </div>
                           </div>
                           <div className="text-xs text-slate-400 mb-2 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
                             +{data.xp} XP
@@ -505,18 +579,26 @@ export default function AnalyticsPage() {
                             initial={{ scaleY: 0 }}
                             animate={{ scaleY: 1 }}
                             transition={{ duration: 0.5, delay: index * 0.1 }}
-                            style={{ originY: 1, height: `${Math.max(height, 8)}%`, minHeight: '12px' }}
+                            style={{
+                              originY: 1,
+                              height: `${Math.max(height, 8)}%`,
+                              minHeight: "12px",
+                            }}
                             className={`w-full rounded-2xl transition-all duration-300 ${
                               isToday
-                                ? 'bg-gradient-to-t from-blue-600 via-blue-500 to-indigo-400 shadow-lg shadow-blue-500/40'
+                                ? "bg-gradient-to-t from-blue-600 via-blue-500 to-indigo-400 shadow-lg shadow-blue-500/40"
                                 : data.problems > 0
-                                ? 'bg-gradient-to-t from-slate-600 to-slate-500 group-hover:from-blue-400 group-hover:to-blue-300 group-hover:shadow-lg group-hover:shadow-blue-400/30'
-                                : 'bg-slate-700'
+                                  ? "bg-gradient-to-t from-slate-600 to-slate-500 group-hover:from-blue-400 group-hover:to-blue-300 group-hover:shadow-lg group-hover:shadow-blue-400/30"
+                                  : "bg-slate-700"
                             }`}
                           />
-                          <div className={`text-xs mt-3 font-semibold transition-colors ${
-                            isToday ? 'text-blue-400' : 'text-slate-400 group-hover:text-blue-400'
-                          }`}>
+                          <div
+                            className={`text-xs mt-3 font-semibold transition-colors ${
+                              isToday
+                                ? "text-blue-400"
+                                : "text-slate-400 group-hover:text-blue-400"
+                            }`}
+                          >
                             {data.day}
                           </div>
                         </motion.div>
@@ -530,19 +612,27 @@ export default function AnalyticsPage() {
                       <div className="text-2xl font-bold text-white">
                         {weeklyData.reduce((sum, d) => sum + d.problems, 0)}
                       </div>
-                      <div className="text-xs text-slate-400 font-medium">총 문제</div>
+                      <div className="text-xs text-slate-400 font-medium">
+                        총 문제
+                      </div>
                     </div>
                     <div className="text-center p-3 rounded-2xl bg-slate-800/60">
                       <div className="text-2xl font-bold text-white">
-                        {formatTime(weeklyData.reduce((sum, d) => sum + d.minutes, 0))}
+                        {formatTime(
+                          weeklyData.reduce((sum, d) => sum + d.minutes, 0),
+                        )}
                       </div>
-                      <div className="text-xs text-slate-400 font-medium">총 학습</div>
+                      <div className="text-xs text-slate-400 font-medium">
+                        총 학습
+                      </div>
                     </div>
                     <div className="text-center p-3 rounded-2xl bg-slate-800/60">
                       <div className="text-2xl font-bold text-white">
-                        {weeklyData.filter(d => d.problems > 0).length}일
+                        {weeklyData.filter((d) => d.problems > 0).length}일
                       </div>
-                      <div className="text-xs text-slate-400 font-medium">활동일</div>
+                      <div className="text-xs text-slate-400 font-medium">
+                        활동일
+                      </div>
                     </div>
                   </div>
                 </>
@@ -557,10 +647,12 @@ export default function AnalyticsPage() {
                 <div className="p-2 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600">
                   <Trophy className="w-5 h-5 text-white" />
                 </div>
-                <h3 className="text-lg font-semibold text-white">레벨 & 경험치</h3>
+                <h3 className="text-lg font-semibold text-white">
+                  레벨 & 경험치
+                </h3>
               </div>
 
-              {(loading || authLoading) ? (
+              {loading || authLoading ? (
                 <div className="flex-1 flex items-center justify-center">
                   <div className="w-24 h-24 bg-slate-200/80 rounded-full animate-pulse" />
                 </div>
@@ -571,7 +663,7 @@ export default function AnalyticsPage() {
                     <motion.div
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
-                      transition={{ type: 'spring', duration: 0.8, delay: 0.6 }}
+                      transition={{ type: "spring", duration: 0.8, delay: 0.6 }}
                       className="relative mb-4"
                     >
                       <div className="w-28 h-28 rounded-full bg-gradient-to-br from-violet-500 via-purple-500 to-indigo-600 flex items-center justify-center shadow-2xl shadow-violet-500/40">
@@ -582,7 +674,7 @@ export default function AnalyticsPage() {
                       <motion.div
                         initial={{ scale: 0 }}
                         animate={{ scale: 1 }}
-                        transition={{ type: 'spring', delay: 0.8 }}
+                        transition={{ type: "spring", delay: 0.8 }}
                         className="absolute -bottom-1 -right-1 w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-lg shadow-lg border-4 border-white"
                       >
                         <Sparkles className="w-5 h-5 text-white" />
@@ -604,7 +696,11 @@ export default function AnalyticsPage() {
                         <motion.div
                           initial={{ width: 0 }}
                           animate={{ width: `${stats?.xpProgress || 0}%` }}
-                          transition={{ duration: 1, delay: 0.7, ease: 'easeOut' }}
+                          transition={{
+                            duration: 1,
+                            delay: 0.7,
+                            ease: "easeOut",
+                          }}
                           className="absolute inset-y-0 left-0 bg-gradient-to-r from-violet-500 to-indigo-500 rounded-full"
                         />
                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer" />
@@ -612,7 +708,9 @@ export default function AnalyticsPage() {
                     </div>
                     <div className="flex justify-between w-full text-xs text-slate-400 mb-4">
                       <span>Lv.{stats?.currentLevel || 1}</span>
-                      <span className="text-violet-500 font-medium">{stats?.xpToNextLevel || 0} XP 남음</span>
+                      <span className="text-violet-500 font-medium">
+                        {stats?.xpToNextLevel || 0} XP 남음
+                      </span>
                       <span>Lv.{(stats?.currentLevel || 1) + 1}</span>
                     </div>
                   </div>
@@ -622,7 +720,9 @@ export default function AnalyticsPage() {
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <Zap className="w-4 h-4 text-blue-500" />
-                        <span className="text-sm font-medium text-slate-200">몰입 학습</span>
+                        <span className="text-sm font-medium text-slate-200">
+                          몰입 학습
+                        </span>
                       </div>
                       <span className="text-lg font-bold text-blue-400">
                         {stats?.flowTimePercentage || 0}%
@@ -631,7 +731,9 @@ export default function AnalyticsPage() {
                     <div className="relative h-2 bg-slate-700 rounded-full overflow-hidden">
                       <motion.div
                         initial={{ width: 0 }}
-                        animate={{ width: `${stats?.flowTimePercentage || 0}%` }}
+                        animate={{
+                          width: `${stats?.flowTimePercentage || 0}%`,
+                        }}
                         transition={{ duration: 1, delay: 0.8 }}
                         className="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full"
                       />
@@ -652,13 +754,18 @@ export default function AnalyticsPage() {
                 <div className="p-2 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600">
                   <BookOpen className="w-5 h-5 text-white" />
                 </div>
-                <h3 className="text-lg font-semibold text-white">주제별 숙련도</h3>
+                <h3 className="text-lg font-semibold text-white">
+                  주제별 숙련도
+                </h3>
               </div>
 
-              {(loading || authLoading) ? (
+              {loading || authLoading ? (
                 <div className="space-y-4">
                   {[...Array(4)].map((_, i) => (
-                    <div key={i} className="flex items-center gap-4 animate-pulse">
+                    <div
+                      key={i}
+                      className="flex items-center gap-4 animate-pulse"
+                    >
                       <div className="w-24 h-4 bg-slate-200 rounded" />
                       <div className="flex-1 h-3 bg-slate-200 rounded" />
                       <div className="w-12 h-4 bg-slate-200 rounded" />
@@ -669,12 +776,30 @@ export default function AnalyticsPage() {
                 <div className="space-y-4">
                   {topicMastery.map((topic, index) => {
                     const colors = [
-                      { bg: 'from-blue-500 to-cyan-500', shadow: 'shadow-blue-500/30' },
-                      { bg: 'from-emerald-500 to-teal-500', shadow: 'shadow-emerald-500/30' },
-                      { bg: 'from-violet-500 to-purple-500', shadow: 'shadow-violet-500/30' },
-                      { bg: 'from-amber-500 to-orange-500', shadow: 'shadow-amber-500/30' },
-                      { bg: 'from-rose-500 to-pink-500', shadow: 'shadow-rose-500/30' },
-                      { bg: 'from-indigo-500 to-blue-500', shadow: 'shadow-indigo-500/30' },
+                      {
+                        bg: "from-blue-500 to-cyan-500",
+                        shadow: "shadow-blue-500/30",
+                      },
+                      {
+                        bg: "from-emerald-500 to-teal-500",
+                        shadow: "shadow-emerald-500/30",
+                      },
+                      {
+                        bg: "from-violet-500 to-purple-500",
+                        shadow: "shadow-violet-500/30",
+                      },
+                      {
+                        bg: "from-amber-500 to-orange-500",
+                        shadow: "shadow-amber-500/30",
+                      },
+                      {
+                        bg: "from-rose-500 to-pink-500",
+                        shadow: "shadow-rose-500/30",
+                      },
+                      {
+                        bg: "from-indigo-500 to-blue-500",
+                        shadow: "shadow-indigo-500/30",
+                      },
                     ];
                     const color = colors[index % colors.length];
 
@@ -687,9 +812,14 @@ export default function AnalyticsPage() {
                         className="group p-4 rounded-2xl bg-slate-800/60 hover:bg-slate-700/80 hover:shadow-lg transition-all duration-300 border border-white/10 hover:border-white/20"
                       >
                         <div className="flex items-center justify-between mb-3">
-                          <span className="font-medium text-slate-200">{topic.topic}</span>
+                          <span className="font-medium text-slate-200">
+                            {topic.topic}
+                          </span>
                           <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="text-xs bg-slate-700 text-slate-300">
+                            <Badge
+                              variant="secondary"
+                              className="text-xs bg-slate-700 text-slate-300"
+                            >
                               {topic.problems}문제
                             </Badge>
                             <span className="text-xl font-bold text-white">
@@ -701,7 +831,10 @@ export default function AnalyticsPage() {
                           <motion.div
                             initial={{ width: 0 }}
                             animate={{ width: `${topic.mastery}%` }}
-                            transition={{ duration: 0.8, delay: 0.2 + index * 0.1 }}
+                            transition={{
+                              duration: 0.8,
+                              delay: 0.2 + index * 0.1,
+                            }}
                             className={`absolute inset-y-0 left-0 bg-gradient-to-r ${color.bg} rounded-full group-hover:${color.shadow} transition-shadow`}
                           />
                         </div>
@@ -713,7 +846,9 @@ export default function AnalyticsPage() {
                 <div className="text-center py-12 text-slate-400">
                   <BookOpen className="w-12 h-12 mx-auto mb-3 text-slate-300" />
                   <p className="font-medium">아직 학습 기록이 없습니다</p>
-                  <p className="text-sm mt-1">문제를 풀면 주제별 숙련도가 표시됩니다</p>
+                  <p className="text-sm mt-1">
+                    문제를 풀면 주제별 숙련도가 표시됩니다
+                  </p>
                 </div>
               )}
             </div>
@@ -727,17 +862,22 @@ export default function AnalyticsPage() {
                   <div className="p-2 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600">
                     <Clock className="w-5 h-5 text-white" />
                   </div>
-                  <h3 className="text-lg font-semibold text-white">최근 학습</h3>
+                  <h3 className="text-lg font-semibold text-white">
+                    최근 학습
+                  </h3>
                 </div>
                 <button className="text-sm text-slate-400 hover:text-blue-400 flex items-center gap-1 transition-colors">
                   더보기 <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
 
-              {(loading || authLoading) ? (
+              {loading || authLoading ? (
                 <div className="space-y-3">
                   {[...Array(3)].map((_, i) => (
-                    <div key={i} className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl animate-pulse">
+                    <div
+                      key={i}
+                      className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl animate-pulse"
+                    >
                       <div className="w-16 h-12 bg-slate-200 rounded-lg" />
                       <div className="flex-1 space-y-2">
                         <div className="h-4 bg-slate-200 rounded w-32" />
@@ -749,9 +889,10 @@ export default function AnalyticsPage() {
               ) : recentSessions.length > 0 ? (
                 <div className="space-y-3">
                   {recentSessions.map((session, index) => {
-                    const accuracy = session.problems > 0
-                      ? Math.round((session.correct / session.problems) * 100)
-                      : 0;
+                    const accuracy =
+                      session.problems > 0
+                        ? Math.round((session.correct / session.problems) * 100)
+                        : 0;
 
                     return (
                       <motion.div
@@ -764,17 +905,25 @@ export default function AnalyticsPage() {
                       >
                         <div className="min-w-[70px]">
                           <div className="text-sm font-semibold text-white">
-                            {new Date(session.date).toLocaleDateString('ko-KR', {
-                              month: 'short',
-                              day: 'numeric',
-                            })}
+                            {new Date(session.date).toLocaleDateString(
+                              "ko-KR",
+                              {
+                                month: "short",
+                                day: "numeric",
+                              },
+                            )}
                           </div>
-                          <div className="text-xs text-slate-400">{session.duration}분</div>
+                          <div className="text-xs text-slate-400">
+                            {session.duration}분
+                          </div>
                         </div>
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-2 flex-wrap">
-                            <Badge variant="outline" className="text-xs bg-slate-700/80 shrink-0">
+                            <Badge
+                              variant="outline"
+                              className="text-xs bg-slate-700/80 shrink-0"
+                            >
                               {session.topic}
                             </Badge>
                             <span className="text-sm text-slate-300">
@@ -785,10 +934,10 @@ export default function AnalyticsPage() {
                             <div
                               className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${
                                 accuracy >= 80
-                                  ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                                  ? "bg-gradient-to-r from-emerald-500 to-teal-400"
                                   : accuracy >= 60
-                                  ? 'bg-gradient-to-r from-amber-500 to-yellow-400'
-                                  : 'bg-gradient-to-r from-slate-400 to-slate-300'
+                                    ? "bg-gradient-to-r from-amber-500 to-yellow-400"
+                                    : "bg-gradient-to-r from-slate-400 to-slate-300"
                               }`}
                               style={{ width: `${accuracy}%` }}
                             />
@@ -821,8 +970,12 @@ export default function AnalyticsPage() {
 
       <style jsx>{`
         @keyframes shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
+          0% {
+            transform: translateX(-100%);
+          }
+          100% {
+            transform: translateX(100%);
+          }
         }
         .animate-shimmer {
           animation: shimmer 2s infinite;

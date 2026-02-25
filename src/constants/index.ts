@@ -1,5 +1,5 @@
 // ============================================================
-// MathFlow - Constants
+// 셈마루(SemMaru) - Constants
 // ============================================================
 
 // IRT Constants
@@ -39,7 +39,8 @@ export const XP_CONSTANTS = {
 // Calculate XP needed for a level
 export function getXPForLevel(level: number): number {
   return Math.floor(
-    XP_CONSTANTS.LEVEL_XP_BASE * Math.pow(XP_CONSTANTS.LEVEL_XP_MULTIPLIER, level - 1)
+    XP_CONSTANTS.LEVEL_XP_BASE *
+      Math.pow(XP_CONSTANTS.LEVEL_XP_MULTIPLIER, level - 1),
   );
 }
 
@@ -77,158 +78,158 @@ export const API_LIMITS = {
 
 // Grade to Topic Mapping
 export const GRADE_TOPICS: Record<number, string[]> = {
-  1: ['arithmetic'],
-  2: ['arithmetic', 'fractions'],
-  3: ['arithmetic', 'fractions', 'decimals'],
-  4: ['arithmetic', 'fractions', 'decimals', 'geometry'],
-  5: ['fractions', 'decimals', 'geometry', 'statistics'],
-  6: ['fractions', 'decimals', 'geometry', 'statistics', 'probability'],
-  7: ['algebra', 'geometry', 'statistics'],
-  8: ['algebra', 'functions', 'geometry'],
-  9: ['algebra', 'functions', 'geometry', 'statistics'],
-  10: ['algebra', 'functions', 'geometry', 'probability'],
-  11: ['functions', 'calculus', 'vectors', 'sequences'],
-  12: ['calculus', 'vectors', 'sequences', 'probability'],
+  1: ["arithmetic"],
+  2: ["arithmetic", "fractions"],
+  3: ["arithmetic", "fractions", "decimals"],
+  4: ["arithmetic", "fractions", "decimals", "geometry"],
+  5: ["fractions", "decimals", "geometry", "statistics"],
+  6: ["fractions", "decimals", "geometry", "statistics", "probability"],
+  7: ["algebra", "geometry", "statistics"],
+  8: ["algebra", "functions", "geometry"],
+  9: ["algebra", "functions", "geometry", "statistics"],
+  10: ["algebra", "functions", "geometry", "probability"],
+  11: ["functions", "calculus", "vectors", "sequences"],
+  12: ["calculus", "vectors", "sequences", "probability"],
 };
 
 // Difficulty Labels
 export const DIFFICULTY_LABELS: Record<string, string> = {
-  '-3': '매우 쉬움',
-  '-2': '쉬움',
-  '-1': '약간 쉬움',
-  '0': '보통',
-  '1': '약간 어려움',
-  '2': '어려움',
-  '3': '매우 어려움',
+  "-3": "매우 쉬움",
+  "-2": "쉬움",
+  "-1": "약간 쉬움",
+  "0": "보통",
+  "1": "약간 어려움",
+  "2": "어려움",
+  "3": "매우 어려움",
 };
 
 // Achievement Definitions
 export const ACHIEVEMENTS = {
   // Problems solved
   FIRST_PROBLEM: {
-    id: 'first_problem',
-    name: '첫 걸음',
-    description: '첫 번째 문제를 풀었습니다',
-    icon: '🎯',
-    category: 'problems' as const,
+    id: "first_problem",
+    name: "첫 걸음",
+    description: "첫 번째 문제를 풀었습니다",
+    icon: "🎯",
+    category: "problems" as const,
     requirement: 1,
     xp_reward: 50,
   },
   TEN_PROBLEMS: {
-    id: 'ten_problems',
-    name: '열 번의 도전',
-    description: '10문제를 풀었습니다',
-    icon: '🔟',
-    category: 'problems' as const,
+    id: "ten_problems",
+    name: "열 번의 도전",
+    description: "10문제를 풀었습니다",
+    icon: "🔟",
+    category: "problems" as const,
     requirement: 10,
     xp_reward: 100,
   },
   HUNDRED_PROBLEMS: {
-    id: 'hundred_problems',
-    name: '백전백승',
-    description: '100문제를 풀었습니다',
-    icon: '💯',
-    category: 'problems' as const,
+    id: "hundred_problems",
+    name: "백전백승",
+    description: "100문제를 풀었습니다",
+    icon: "💯",
+    category: "problems" as const,
     requirement: 100,
     xp_reward: 500,
   },
   THOUSAND_PROBLEMS: {
-    id: 'thousand_problems',
-    name: '천재',
-    description: '1000문제를 풀었습니다',
-    icon: '🏆',
-    category: 'problems' as const,
+    id: "thousand_problems",
+    name: "천재",
+    description: "1000문제를 풀었습니다",
+    icon: "🏆",
+    category: "problems" as const,
     requirement: 1000,
     xp_reward: 2000,
   },
 
   // Streaks
   THREE_DAY_STREAK: {
-    id: 'three_day_streak',
-    name: '꾸준한 시작',
-    description: '3일 연속 학습',
-    icon: '🔥',
-    category: 'streak' as const,
+    id: "three_day_streak",
+    name: "꾸준한 시작",
+    description: "3일 연속 학습",
+    icon: "🔥",
+    category: "streak" as const,
     requirement: 3,
     xp_reward: 100,
   },
   WEEK_STREAK: {
-    id: 'week_streak',
-    name: '일주일 마라톤',
-    description: '7일 연속 학습',
-    icon: '📅',
-    category: 'streak' as const,
+    id: "week_streak",
+    name: "일주일 마라톤",
+    description: "7일 연속 학습",
+    icon: "📅",
+    category: "streak" as const,
     requirement: 7,
     xp_reward: 300,
   },
   MONTH_STREAK: {
-    id: 'month_streak',
-    name: '한 달의 기적',
-    description: '30일 연속 학습',
-    icon: '🗓️',
-    category: 'streak' as const,
+    id: "month_streak",
+    name: "한 달의 기적",
+    description: "30일 연속 학습",
+    icon: "🗓️",
+    category: "streak" as const,
     requirement: 30,
     xp_reward: 1000,
   },
 
   // Accuracy
   PERFECT_SESSION: {
-    id: 'perfect_session',
-    name: '완벽한 세션',
-    description: '한 세션 100% 정답률',
-    icon: '✨',
-    category: 'accuracy' as const,
+    id: "perfect_session",
+    name: "완벽한 세션",
+    description: "한 세션 100% 정답률",
+    icon: "✨",
+    category: "accuracy" as const,
     requirement: 100,
     xp_reward: 200,
   },
   HIGH_ACCURACY: {
-    id: 'high_accuracy',
-    name: '정확도 마스터',
-    description: '전체 정답률 90% 이상',
-    icon: '🎯',
-    category: 'accuracy' as const,
+    id: "high_accuracy",
+    name: "정확도 마스터",
+    description: "전체 정답률 90% 이상",
+    icon: "🎯",
+    category: "accuracy" as const,
     requirement: 90,
     xp_reward: 500,
   },
 
   // Flow
   FIRST_FLOW: {
-    id: 'first_flow',
-    name: '첫 몰입',
-    description: '처음으로 몰입 상태 도달',
-    icon: '🧘',
-    category: 'flow' as const,
+    id: "first_flow",
+    name: "첫 몰입",
+    description: "처음으로 몰입 상태 도달",
+    icon: "🧘",
+    category: "flow" as const,
     requirement: 1,
     xp_reward: 100,
   },
   FLOW_MASTER: {
-    id: 'flow_master',
-    name: '몰입의 달인',
-    description: '1시간 연속 몰입',
-    icon: '🧠',
-    category: 'flow' as const,
+    id: "flow_master",
+    name: "몰입의 달인",
+    description: "1시간 연속 몰입",
+    icon: "🧠",
+    category: "flow" as const,
     requirement: 60,
     xp_reward: 500,
   },
 
   // Speed
   QUICK_SOLVER: {
-    id: 'quick_solver',
-    name: '번개 솔버',
-    description: '10초 이내 정답',
-    icon: '⚡',
-    category: 'speed' as const,
+    id: "quick_solver",
+    name: "번개 솔버",
+    description: "10초 이내 정답",
+    icon: "⚡",
+    category: "speed" as const,
     requirement: 10,
     xp_reward: 50,
   },
 
   // Mastery
   TOPIC_MASTER: {
-    id: 'topic_master',
-    name: '주제 마스터',
-    description: '한 주제 완전 정복',
-    icon: '👑',
-    category: 'mastery' as const,
+    id: "topic_master",
+    name: "주제 마스터",
+    description: "한 주제 완전 정복",
+    icon: "👑",
+    category: "mastery" as const,
     requirement: 1,
     xp_reward: 1000,
   },
@@ -236,13 +237,13 @@ export const ACHIEVEMENTS = {
 
 // App Configuration
 export const APP_CONFIG = {
-  name: 'MathFlow',
-  tagline: '몰입으로 수학을 정복하다',
-  description: 'AI 기반 적응형 수학 학습 플랫폼',
-  version: '1.0.0',
-  support_email: 'support@mathflow.kr',
-  social: {
-    twitter: 'https://twitter.com/mathflow_kr',
-    github: 'https://github.com/insushim/iswflowmath',
-  },
+  name: "셈마루",
+  nameEn: "SemMaru",
+  tagline: "몰입으로 수학의 정상에 오르다",
+  description: "AI 기반 적응형 수학 학습 플랫폼",
+  version: "1.0.0",
+  support_email: "support@semmaru.kr",
+  github: "https://github.com/insushim/iswflowmath",
+  updateCheckUrl:
+    "https://api.github.com/repos/insushim/iswflowmath/releases/latest",
 };

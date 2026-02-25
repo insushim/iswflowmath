@@ -1,30 +1,30 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { signIn, signInWithGoogle } from '@/lib/firebase/auth';
-import { Sparkles, Mail, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { signIn, signInWithGoogle } from "@/lib/firebase/auth";
+import { Sparkles, Mail, Lock, ArrowRight, Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
       await signIn(email, password);
-      router.push('/dashboard');
+      router.push("/dashboard");
     } catch (err: unknown) {
-      console.error('Login error:', err);
-      setError('로그인에 실패했습니다. 이메일과 비밀번호를 확인해주세요.');
+      console.error("Login error:", err);
+      setError("로그인에 실패했습니다. 이메일과 비밀번호를 확인해주세요.");
     } finally {
       setLoading(false);
     }
@@ -32,14 +32,14 @@ export default function LoginPage() {
 
   const handleGoogleLogin = async () => {
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
       await signInWithGoogle();
-      router.push('/dashboard');
+      router.push("/dashboard");
     } catch (err: unknown) {
-      console.error('Google login error:', err);
-      setError('Google 로그인에 실패했습니다.');
+      console.error("Google login error:", err);
+      setError("Google 로그인에 실패했습니다.");
     } finally {
       setLoading(false);
     }
@@ -62,23 +62,29 @@ export default function LoginPage() {
               <Sparkles className="w-6 h-6 text-white" />
             </div>
             <span className="font-bold text-3xl gradient-text-vibrant">
-              MathFlow
+              셈마루
             </span>
           </Link>
 
           <h1 className="text-4xl font-bold text-white mb-4">
-            AI 기반 맞춤형<br />수학 학습 플랫폼
+            AI 기반 맞춤형
+            <br />
+            수학 학습 플랫폼
           </h1>
           <p className="text-lg text-slate-400 mb-8">
-            개인화된 문제와 몰입형 학습 경험으로<br />
+            개인화된 문제와 몰입형 학습 경험으로
+            <br />
             수학 실력을 한 단계 높여보세요.
           </p>
 
           <div className="space-y-4">
             {[
-              { title: '적응형 학습', desc: 'AI가 실력에 맞는 문제를 제공' },
-              { title: '게이미피케이션', desc: 'XP, 레벨, 업적으로 재미있는 학습' },
-              { title: '실시간 분석', desc: '학습 현황을 한눈에 파악' },
+              { title: "적응형 학습", desc: "AI가 실력에 맞는 문제를 제공" },
+              {
+                title: "게이미피케이션",
+                desc: "XP, 레벨, 업적으로 재미있는 학습",
+              },
+              { title: "실시간 분석", desc: "학습 현황을 한눈에 파악" },
             ].map((item, i) => (
               <div key={i} className="flex items-center gap-4">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 flex items-center justify-center">
@@ -103,14 +109,18 @@ export default function LoginPage() {
               <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/25">
                 <Sparkles className="w-6 h-6 text-white" />
               </div>
-              <span className="font-bold text-2xl gradient-text-vibrant">MathFlow</span>
+              <span className="font-bold text-2xl gradient-text-vibrant">
+                셈마루
+              </span>
             </Link>
           </div>
 
           <div className="bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
             <div className="text-center mb-8">
               <h2 className="text-2xl font-bold text-white mb-2">로그인</h2>
-              <p className="text-slate-400">계정에 로그인하여 학습을 계속하세요</p>
+              <p className="text-slate-400">
+                계정에 로그인하여 학습을 계속하세요
+              </p>
             </div>
 
             <form onSubmit={handleLogin} className="space-y-5">
@@ -122,7 +132,9 @@ export default function LoginPage() {
               )}
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">이메일</label>
+                <label className="text-sm font-medium text-slate-300">
+                  이메일
+                </label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                   <input
@@ -137,11 +149,13 @@ export default function LoginPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">비밀번호</label>
+                <label className="text-sm font-medium text-slate-300">
+                  비밀번호
+                </label>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                   <input
-                    type={showPassword ? 'text' : 'password'}
+                    type={showPassword ? "text" : "password"}
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -153,7 +167,11 @@ export default function LoginPage() {
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
                   >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    {showPassword ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -211,18 +229,27 @@ export default function LoginPage() {
             </button>
 
             <div className="mt-6 flex justify-center gap-4 text-sm">
-              <Link href="/find-email" className="text-slate-400 hover:text-indigo-400 transition-colors">
+              <Link
+                href="/find-email"
+                className="text-slate-400 hover:text-indigo-400 transition-colors"
+              >
                 아이디 찾기
               </Link>
               <span className="text-slate-700">|</span>
-              <Link href="/find-password" className="text-slate-400 hover:text-indigo-400 transition-colors">
+              <Link
+                href="/find-password"
+                className="text-slate-400 hover:text-indigo-400 transition-colors"
+              >
                 비밀번호 찾기
               </Link>
             </div>
 
             <div className="mt-6 text-center text-sm text-slate-400">
-              계정이 없으신가요?{' '}
-              <Link href="/signup" className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors">
+              계정이 없으신가요?{" "}
+              <Link
+                href="/signup"
+                className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors"
+              >
                 회원가입
               </Link>
             </div>
